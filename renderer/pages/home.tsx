@@ -1,8 +1,6 @@
 import Head from 'next/head'
-import { toast } from 'sonner'
-import { TrendingUp, Sparkles } from 'lucide-react'
+import { LineChart, PieChart, Wallet } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -15,39 +13,59 @@ export default function HomePage() {
   return (
     <>
       <Head>
-        <title>Portfolio Tracker</title>
+        <title>Dashboard · Portfolio Tracker</title>
       </Head>
-      <main className="min-h-screen flex items-center justify-center p-8 bg-background">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="text-primary size-5" />
-              <CardTitle>Portfolio Tracker</CardTitle>
-            </div>
-            <CardDescription>
-              Suivi local de ton portefeuille d'actions
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Stack initialisee : Nextron + Tailwind 4 + shadcn/ui. Pret pour les
-              prochaines etapes (DB locale, holdings, dashboard, etc.).
-            </p>
-            <div className="flex gap-2">
-              <Button onClick={() => toast.success('Toast Sonner fonctionnel !')}>
-                <Sparkles />
-                Tester un toast
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => toast('Bouton secondaire OK')}
-              >
-                Variant outline
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </main>
+      <div className="p-6 max-w-6xl mx-auto space-y-6">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Vue d'ensemble du portefeuille. Les graphiques et indicateurs
+            apparaitront aux etapes 4 et 5.
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Wallet className="size-4 text-primary" />
+                Valeur totale
+              </CardTitle>
+              <CardDescription>A integrer (etape 3 : market-api)</CardDescription>
+            </CardHeader>
+            <CardContent className="text-3xl font-semibold tabular-nums">
+              —
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <PieChart className="size-4 text-primary" />
+                Allocation par secteur
+              </CardTitle>
+              <CardDescription>Pie chart (etape 4)</CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Aucune donnee — ajoute des positions dans Holdings.
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <LineChart className="size-4 text-primary" />
+                Historique
+              </CardTitle>
+              <CardDescription>
+                Line chart des snapshots (etape 5)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Le premier snapshot sera enregistre quand l'api de marche sera
+              branchee.
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </>
   )
 }

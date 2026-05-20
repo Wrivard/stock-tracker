@@ -1,7 +1,9 @@
 import path from 'path'
-import { app, ipcMain } from 'electron'
+import { app } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers/create-window'
+import { closeDb, initDb } from './db/connection'
+import { registerIpcHandlers } from './ipc/handlers'
 
 const isProd = process.env.NODE_ENV === 'production'
 
@@ -14,9 +16,12 @@ if (isProd) {
 ;(async () => {
   await app.whenReady()
 
+  initDb()
+  registerIpcHandlers()
+
   const mainWindow = createWindow('main', {
-    width: 1000,
-    height: 600,
+    width: 1200,
+    height: 800,
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.js'),
     },
@@ -32,9 +37,6 @@ if (isProd) {
 })()
 
 app.on('window-all-closed', () => {
+  closeDb()
   app.quit()
-})
-
-ipcMain.on('message', async (event, arg) => {
-  event.reply('message', `${arg} World!`)
 })

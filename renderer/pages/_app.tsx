@@ -1,6 +1,7 @@
 import type { AppProps } from 'next/app'
 import { ThemeProvider } from 'next-themes'
 
+import { AppLayout } from '@/components/layout/AppLayout'
 import { Toaster } from '@/components/ui/sonner'
 import '../styles/globals.css'
 
@@ -12,7 +13,9 @@ function MyApp({ Component, pageProps }: AppProps) {
       enableSystem={false}
       disableTransitionOnChange
     >
-      <Component {...pageProps} />
+      <AppLayout>
+        <Component {...pageProps} />
+      </AppLayout>
       <Toaster />
     </ThemeProvider>
   )

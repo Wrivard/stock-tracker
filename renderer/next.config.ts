@@ -9,9 +9,10 @@ const config: NextConfig = {
     unoptimized: true,
   },
   turbopack: {
-    // Ancrer la racine Turbopack au dossier renderer pour eviter l'ambiguite
-    // detectee lorsqu'un package-lock.json existe plus haut dans l'arborescence.
-    root: path.resolve(import.meta.dirname),
+    // Ancrer Turbopack a la racine du projet Nextron (ou vivent node_modules
+    // et package.json). Sans ca, Turbopack remonte au home Windows et choisit
+    // le mauvais package-lock.json.
+    root: path.resolve(import.meta.dirname, '..'),
   },
 }
 
