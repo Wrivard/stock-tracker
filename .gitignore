@@ -1,0 +1,34 @@
+# dependencies
+node_modules
+
+# next.js
+.next
+next-env.d.ts
+
+# build
+/app
+/dist
+
+# env
+.env
+.env.*
+!.env.example
+
+# local data (SQLite)
+*.sqlite
+*.sqlite-journal
+*.db
+data/
+
+# logs
+*.log
+npm-debug.log*
+
+# editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Claude Code local settings
+.claude/
