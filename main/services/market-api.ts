@@ -270,6 +270,19 @@ export async function refreshAll(opts?: { bypass?: boolean }) {
     tickers.map((t) => getHistory(t.symbol, '1Y').catch(() => undefined)),
   )
 
+  // Warm the FX cache. Until this lands, the only path that fetched
+  // USD->CAD was the daily snapshot — and only when the user had USD
+  // holdings AND the snapshot hadn't already run today. Without a fresh
+  // FX row, portfolio.ts/timeseries.ts fall back to rate = 1, which
+  // makes the CAD/USD toggle appear "stuck": multiplying every USD
+  // value by 1 gives back the same number, so toggling looks like a
+  // no-op. We fetch both directions; one is the inverse of the other
+  // and Frankfurter is cheap, so this is straightforward.
+  await Promise.allSettled([
+    getFxRate('USD', 'CAD').catch(() => undefined),
+    getFxRate('CAD', 'USD').catch(() => undefined),
+  ])
+
   return out
 }
 

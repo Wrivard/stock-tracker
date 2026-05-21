@@ -11,6 +11,7 @@ import { runDailyBackup } from './services/backup'
 import { cleanupExpiredCache, invalidate } from './services/cache'
 import { getSetting, setSetting } from './db/repo/settings'
 import { bootstrapApiKeysFromEnv } from './services/settings-keys'
+import { getFxRate } from './services/market-api'
 import { maybeCaptureDailySnapshot } from './services/snapshots'
 import { initStartupLog, log } from './util/logger'
 
@@ -189,6 +190,17 @@ function bindLocalShortcuts(win: BrowserWindow) {
     } catch (err) {
       log('cache cleanup failed', err instanceof Error ? err : { err: String(err) })
     }
+
+    // Pre-warm USD<->CAD on boot. Without a fresh FX row in the cache,
+    // portfolio.ts/timeseries.ts silently fall back to rate=1 and the
+    // CAD/USD display toggle appears to do nothing (every USD value
+    // multiplied by 1 stays USD). 6 h TTL means this fires roughly
+    // once per session. Frankfurter is free + fast, so the cost is
+    // ~100 ms and the failure is non-blocking.
+    void Promise.allSettled([
+      getFxRate('USD', 'CAD'),
+      getFxRate('CAD', 'USD'),
+    ]).catch((err) => log('fx warmup failed', err instanceof Error ? err : { err: String(err) }))
 
     // Post-update hygiene. When the installed app version changes (either
     // a fresh install or an electron-updater install-on-quit), wipe the
