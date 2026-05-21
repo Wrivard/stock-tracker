@@ -1,0 +1,33 @@
+name: Release
+
+# Triggers on any `v*` tag push (e.g. `v0.2.0`). Build the Windows
+# installer + latest.yml manifest and attach them to a GitHub Release
+# named after the tag. The running app's electron-updater picks the new
+# release up via the public `releases.atom` feed.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Build + publish to GitHub Releases
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
