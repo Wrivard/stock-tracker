@@ -56,6 +56,22 @@ const BypassSchema = z.object({ bypass: z.boolean().optional() }).optional()
 
 type AnyHandler = (...args: never[]) => unknown
 
+// Minimal semver-ish comparator for the updater. Returns -1/0/1 the way
+// Array.prototype.sort expects, comparing the dotted numeric parts only.
+// Anything past the third segment (pre-release tags, etc.) is ignored —
+// we ship stable releases only.
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map((p) => parseInt(p, 10) || 0)
+  const pb = b.split('.').map((p) => parseInt(p, 10) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const da = pa[i] ?? 0
+    const db = pb[i] ?? 0
+    if (da > db) return 1
+    if (da < db) return -1
+  }
+  return 0
+}
+
 function wrap<T extends AnyHandler>(fn: T) {
   return async (_event: IpcMainInvokeEvent, ...args: Parameters<T>) => {
     try {
@@ -264,6 +280,17 @@ export function registerIpcHandlers(): void {
       try {
         const result = await autoUpdater.checkForUpdatesAndNotify()
         if (!result?.updateInfo) {
+          return { status: 'up-to-date' as const }
+        }
+        // checkForUpdatesAndNotify always returns the latest published
+        // metadata even when it matches the installed version. Compare
+        // manually so we don't claim an "Update available" pointing at
+        // the version the user is already running — which then renders
+        // a "Restart to install" button that no-ops because there's
+        // nothing to install. semver-ish compare on the dotted parts is
+        // good enough for our 0.1.x scheme.
+        const current = app.getVersion()
+        if (compareVersions(result.updateInfo.version, current) <= 0) {
           return { status: 'up-to-date' as const }
         }
         return {

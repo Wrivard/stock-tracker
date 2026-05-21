@@ -97,6 +97,10 @@ const dict: Dict = {
     fr: 'Redemarrer pour installer',
     en: 'Restart to install',
   },
+  'settings.downloading': {
+    fr: 'Telechargement…',
+    en: 'Downloading…',
+  },
   'settings.backups': { fr: 'Sauvegardes', en: 'Backups' },
   'settings.backupsHelp': {
     fr: 'Sauvegardes quotidiennes automatiques. 7 plus recentes conservees.',

@@ -79,6 +79,10 @@ export default function SettingsPage() {
     | { status: 'error'; message: string }
     | { status: 'dev'; message: string }
   >({ status: 'idle' })
+  // Tracks the version that finished downloading. quitAndInstall is a
+  // no-op until the file is on disk, so we use this to gate the
+  // "Restart to install" button.
+  const [downloadedVersion, setDownloadedVersion] = useState<string | null>(null)
 
   useEffect(() => {
     if (!initialized) return
@@ -89,6 +93,24 @@ export default function SettingsPage() {
       })
       .catch((err: Error) => toast.error(err.message))
   }, [initialized])
+
+  // Subscribe to the main process "downloaded" signal pushed by
+  // electron-updater. Without this, the Restart button could be clicked
+  // before the .exe finishes downloading and quitAndInstall would
+  // silently no-op.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.api) return
+    const off = window.api.updater.onDownloaded(({ version }) => {
+      setDownloadedVersion(version)
+      setUpdateState((prev) => {
+        if (prev.status === 'available' || prev.status === 'idle') {
+          return { status: 'downloaded', version }
+        }
+        return prev
+      })
+    })
+    return off
+  }, [])
 
   async function handleCheckUpdate() {
     setUpdateBusy(true)
@@ -586,6 +608,24 @@ export default function SettingsPage() {
                 </p>
               )}
               {updateState.status === 'available' && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm">
+                    {t('settings.updateAvailable', { version: updateState.version })}
+                  </p>
+                  {downloadedVersion === updateState.version ? (
+                    <Button size="sm" onClick={handleRestartToInstall}>
+                      <RotateCcw />
+                      {t('settings.restartToInstall')}
+                    </Button>
+                  ) : (
+                    <Button size="sm" disabled>
+                      <RotateCcw className="animate-spin" />
+                      {t('settings.downloading')}
+                    </Button>
+                  )}
+                </div>
+              )}
+              {updateState.status === 'downloaded' && (
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm">
                     {t('settings.updateAvailable', { version: updateState.version })}
