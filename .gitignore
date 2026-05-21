@@ -8,6 +8,8 @@ next-env.d.ts
 # build
 /app
 /dist
+/main.js
+/preload.js
 
 # env
 .env

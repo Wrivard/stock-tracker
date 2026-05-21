@@ -2,8 +2,17 @@ import Head from 'next/head'
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
-import { Eye, EyeOff, ExternalLink, Save } from 'lucide-react'
+import {
+  Download,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  FolderOpen,
+  HardDriveDownload,
+  Save,
+} from 'lucide-react'
 
+import type { BackupInfo } from '../../main/services/backup'
 import { api } from '@/lib/api'
 import { useUi } from '@/lib/store'
 import { useT } from '@/lib/i18n'
@@ -45,19 +54,86 @@ export default function SettingsPage() {
   const [showTwelvedata, setShowTwelvedata] = useState(false)
   const [savingFinnhub, setSavingFinnhub] = useState(false)
   const [savingTwelvedata, setSavingTwelvedata] = useState(false)
+  const [backups, setBackups] = useState<BackupInfo[]>([])
+  const [backupBusy, setBackupBusy] = useState(false)
 
   useEffect(() => {
     if (!initialized) return
     Promise.all([
       api().settings.get('api.finnhubKey'),
       api().settings.get('api.twelvedataKey'),
+      api().backup.list(),
     ])
-      .then(([f, t2]) => {
+      .then(([f, t2, bs]) => {
         if (f) setFinnhubKey(f)
         if (t2) setTwelvedataKey(t2)
+        setBackups(bs)
       })
       .catch((err: Error) => toast.error(err.message))
   }, [initialized])
+
+  async function refreshBackups() {
+    try {
+      setBackups(await api().backup.list())
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function handleBackupNow() {
+    setBackupBusy(true)
+    try {
+      const res = await api().backup.runNow()
+      if (res.created) {
+        toast.success(
+          locale === 'fr'
+            ? 'Sauvegarde enregistree'
+            : 'Backup saved',
+        )
+      } else {
+        toast.info(
+          locale === 'fr'
+            ? "Sauvegarde du jour deja presente"
+            : 'A backup for today already exists',
+        )
+      }
+      await refreshBackups()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  async function handleExport() {
+    setBackupBusy(true)
+    try {
+      const filePath = await api().backup.exportTo()
+      if (filePath) {
+        toast.success(
+          locale === 'fr' ? `Exporte vers ${filePath}` : `Exported to ${filePath}`,
+        )
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  async function handleOpenFolder() {
+    try {
+      await api().backup.openFolder()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  function formatBytes(n: number): string {
+    if (n < 1024) return `${n} B`
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+    return `${(n / 1024 / 1024).toFixed(2)} MB`
+  }
 
   async function saveFinnhub() {
     setSavingFinnhub(true)
@@ -298,6 +374,67 @@ export default function SettingsPage() {
                   : '0 = disabled. Recommended: 300 (5 min).'}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle>{t('settings.backups')}</CardTitle>
+                <CardDescription>{t('settings.backupsHelp')}</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBackupNow}
+                  disabled={backupBusy}
+                >
+                  <HardDriveDownload />
+                  {t('settings.backupNow')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExport}
+                  disabled={backupBusy}
+                >
+                  <Download />
+                  {t('settings.exportSqlite')}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleOpenFolder}>
+                  <FolderOpen />
+                  {t('settings.openBackupFolder')}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {backups.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t('settings.noBackupsYet')}
+              </p>
+            ) : (
+              <ul className="divide-y divide-border text-sm">
+                {backups.map((b) => (
+                  <li
+                    key={b.fileName}
+                    className="flex items-center justify-between py-2"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono tabular-nums">{b.date}</span>
+                      <span className="text-muted-foreground text-xs truncate">
+                        {b.fileName}
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {formatBytes(b.sizeBytes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
 

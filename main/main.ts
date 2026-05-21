@@ -6,6 +6,8 @@ import serve from 'electron-serve'
 import { createWindow } from './helpers/create-window'
 import { closeDb, initDb } from './db/connection'
 import { registerIpcHandlers } from './ipc/handlers'
+import { runDailyBackup } from './services/backup'
+import { cleanupExpiredCache } from './services/cache'
 import { maybeCaptureDailySnapshot } from './services/snapshots'
 import { initStartupLog, log } from './util/logger'
 
@@ -84,10 +86,50 @@ function bindLocalShortcuts(win: BrowserWindow) {
       minWidth: 1024,
       minHeight: 700,
       webPreferences: {
+        // The preload only uses contextBridge + ipcRenderer; both work in a
+        // sandboxed renderer. Sandbox = stronger process isolation, smaller
+        // attack surface if the renderer ever loads untrusted content (e.g.
+        // a news article via a bug).
+        sandbox: true,
+        webSecurity: true,
         preload: path.join(import.meta.dirname, 'preload.js'),
       },
     })
     log('window created')
+
+    // Strict CSP for the production renderer. We don't add it in dev because
+    // Turbopack injects HMR WebSocket connections that 'self' would block.
+    // The app makes no outbound HTTP from the renderer (everything goes via
+    // IPC to the main process), so connect-src can be locked to 'self'.
+    if (isProd) {
+      mainWindow.webContents.session.webRequest.onHeadersReceived(
+        (details, callback) => {
+          callback({
+            responseHeaders: {
+              ...details.responseHeaders,
+              'Content-Security-Policy': [
+                [
+                  "default-src 'self'",
+                  "script-src 'self'",
+                  "style-src 'self' 'unsafe-inline'",
+                  "img-src 'self' data: blob: https:",
+                  "font-src 'self' data:",
+                  "connect-src 'self'",
+                  "frame-src 'none'",
+                  "object-src 'none'",
+                  "base-uri 'self'",
+                ].join('; '),
+              ],
+            },
+          })
+        },
+      )
+    }
+
+    // Refuse to open new top-level windows from inside the renderer. Any
+    // outgoing link must go through shell.openExternal (already wired in
+    // News and Ticker pages); window.open is a vector we don't need.
+    mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
     // Surface renderer/preload load failures so we don't crash silently.
     mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
@@ -115,8 +157,17 @@ function bindLocalShortcuts(win: BrowserWindow) {
 
     log('startup complete')
 
-    // Capture today's portfolio snapshot in the background. Failures are
-    // non-fatal and just logged.
+    // Run daily housekeeping in the background. None of these block the UI
+    // and individual failures are logged but don't bring down the app.
+    void runDailyBackup().catch((err) =>
+      log('backup failed', err instanceof Error ? err : { err: String(err) }),
+    )
+    try {
+      const purged = cleanupExpiredCache()
+      log('cache cleanup', purged)
+    } catch (err) {
+      log('cache cleanup failed', err instanceof Error ? err : { err: String(err) })
+    }
     void maybeCaptureDailySnapshot().catch((err) =>
       log('snapshot capture failed', err instanceof Error ? err : { err: String(err) }),
     )

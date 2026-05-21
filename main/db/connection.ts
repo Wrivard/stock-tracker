@@ -11,6 +11,12 @@ export function getDb(): Database.Database {
   return db
 }
 
+// Test seam: lets a test inject a pre-built in-memory database. Do not call
+// this from production code — it bypasses initialization, migrations, seed.
+export function setDb(database: Database.Database | null): void {
+  db = database
+}
+
 export function initDb(): Database.Database {
   const dbPath = path.join(app.getPath('userData'), 'portfolio.sqlite')
   db = new Database(dbPath)

@@ -93,6 +93,19 @@ export function invalidate(prefix: string): void {
   getDb().prepare('DELETE FROM api_cache WHERE key LIKE ?').run(`${prefix}%`)
 }
 
+// Remove cache rows whose `expires_at` is older than now - maxAgeMs. The
+// default 7 days keeps stale-fallback recoveries available for a week
+// while preventing the table from growing unbounded over months of use.
+export function cleanupExpiredCache(maxAgeMs = 7 * 24 * 3600_000): {
+  deleted: number
+} {
+  const cutoff = Date.now() - maxAgeMs
+  const result = getDb()
+    .prepare('DELETE FROM api_cache WHERE expires_at < ?')
+    .run(cutoff)
+  return { deleted: typeof result.changes === 'number' ? result.changes : 0 }
+}
+
 export function readRaw<T>(key: string): CachedEntry<T> | null {
   const row = readCache<T>(key)
   if (!row) return null

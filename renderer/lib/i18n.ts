@@ -80,6 +80,18 @@ const dict: Dict = {
   'tx.titleFor': { fr: 'Transactions — {ticker}', en: 'Transactions — {ticker}' },
 
   'settings.title': { fr: 'Parametres', en: 'Settings' },
+  'settings.backups': { fr: 'Sauvegardes', en: 'Backups' },
+  'settings.backupsHelp': {
+    fr: 'Sauvegardes quotidiennes automatiques. 7 plus recentes conservees.',
+    en: 'Automatic daily backups. 7 most recent retained.',
+  },
+  'settings.backupNow': { fr: 'Sauvegarder maintenant', en: 'Back up now' },
+  'settings.exportSqlite': { fr: 'Exporter la base', en: 'Export database' },
+  'settings.openBackupFolder': { fr: 'Ouvrir le dossier', en: 'Open folder' },
+  'settings.noBackupsYet': {
+    fr: 'Aucune sauvegarde pour l\'instant.',
+    en: 'No backups yet.',
+  },
   'settings.apiKeys': { fr: 'Cles API', en: 'API keys' },
   'settings.apiKeysHelp': {
     fr: 'Free tiers — finnhub.io et twelvedata.com. Stockees localement.',
@@ -119,6 +131,38 @@ const dict: Dict = {
     en: 'No news. Add holdings or click Refresh to load.',
   },
 
+  'onboarding.welcome.title': {
+    fr: 'Bienvenue dans Portfolio Tracker',
+    en: 'Welcome to Portfolio Tracker',
+  },
+  'onboarding.welcome.body': {
+    fr: 'App locale, tes donnees restent sur ta machine. 3 etapes rapides pour demarrer.',
+    en: 'Local app, your data stays on your machine. 3 quick steps to get started.',
+  },
+  'onboarding.start': { fr: 'Commencer', en: 'Get started' },
+  'onboarding.next': { fr: 'Suivant', en: 'Next' },
+  'onboarding.skip': { fr: 'Passer cette etape', en: 'Skip this step' },
+  'onboarding.finish': { fr: 'Terminer', en: 'Finish' },
+  'onboarding.keys.title': { fr: 'Cles API gratuites', en: 'Free API keys' },
+  'onboarding.keys.body': {
+    fr: 'Tu peux ajouter ces cles maintenant ou plus tard dans Parametres. L\'app fonctionne sans, mais sans cotations live.',
+    en: 'Add these keys now or later in Settings. The app works without, but no live quotes.',
+  },
+  'onboarding.tx.title': { fr: 'Premiere transaction', en: 'First transaction' },
+  'onboarding.tx.body': {
+    fr: 'Saisis ta premiere position pour voir le dashboard se remplir.',
+    en: 'Add your first position to see the dashboard populate.',
+  },
+  'onboarding.targets.title': { fr: 'Cibles par secteur (optionnel)', en: 'Sector targets (optional)' },
+  'onboarding.targets.body': {
+    fr: 'Definis ton allocation cible pour declencher les suggestions de reequilibrage. Tu peux y revenir plus tard.',
+    en: 'Set your target allocation to enable rebalance suggestions. You can edit later.',
+  },
+  'onboarding.done.title': { fr: 'Tout est pret', en: 'All set' },
+  'onboarding.done.body': {
+    fr: 'L\'app est configuree. Clique sur Actualiser dans le header pour charger les cotations.',
+    en: 'The app is configured. Click Refresh in the header to load quotes.',
+  },
   'history.title': { fr: 'Historique', en: 'History' },
   'history.empty': {
     fr: 'Aucun snapshot pour l\'instant. Le premier sera enregistre des qu\'un prix sera disponible.',

@@ -23,6 +23,7 @@ import type { CachedEntry } from './services/cache'
 import type { AnnotatedNewsItem } from './services/market-api'
 import type { PortfolioOverview } from './services/portfolio'
 import type { PortfolioSnapshot } from './services/snapshots'
+import type { BackupInfo } from './services/backup'
 
 type ApiProvider = 'finnhub' | 'twelvedata'
 
@@ -139,6 +140,17 @@ const api = {
   shell: {
     openExternal: (url: string) =>
       ipcRenderer.invoke(IPC.shell.openExternal, url) as Promise<void>,
+  },
+  backup: {
+    list: () => ipcRenderer.invoke(IPC.backup.list) as Promise<BackupInfo[]>,
+    runNow: () =>
+      ipcRenderer.invoke(IPC.backup.runNow) as Promise<{
+        created: string | null
+        rotated: number
+      }>,
+    exportTo: () =>
+      ipcRenderer.invoke(IPC.backup.exportTo) as Promise<string | null>,
+    openFolder: () => ipcRenderer.invoke(IPC.backup.openFolder) as Promise<string>,
   },
 }
 

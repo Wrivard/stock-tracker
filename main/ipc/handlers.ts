@@ -1,4 +1,10 @@
-import { ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import {
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  shell,
+  type IpcMainInvokeEvent,
+} from 'electron'
 import { z } from 'zod'
 
 import { IPC } from './channels'
@@ -10,6 +16,7 @@ import * as txRepo from '../db/repo/transactions'
 import * as market from '../services/market-api'
 import * as portfolio from '../services/portfolio'
 import * as snapshots from '../services/snapshots'
+import * as backup from '../services/backup'
 import { getApiKey, setApiKey } from '../services/settings-keys'
 
 const Currency = z.enum(['USD', 'CAD'])
@@ -195,4 +202,32 @@ export function registerIpcHandlers(): void {
       await shell.openExternal(safe)
     }),
   )
+
+  ipcMain.handle(IPC.backup.list, wrap(() => backup.listBackups()))
+  ipcMain.handle(IPC.backup.runNow, wrap(() => backup.runDailyBackup()))
+  ipcMain.handle(IPC.backup.openFolder, wrap(() => shell.openPath(backup.getBackupDir())))
+
+  // Save dialog needs the sender's window to be modal — fall back to no
+  // window if we can't resolve one (still works, just not modal).
+  ipcMain.handle(IPC.backup.exportTo, async (event: IpcMainInvokeEvent) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      const defaultName = `portfolio-export-${new Date().toISOString().slice(0, 10)}.sqlite`
+      const result = win
+        ? await dialog.showSaveDialog(win, {
+            defaultPath: defaultName,
+            filters: [{ name: 'SQLite database', extensions: ['sqlite', 'db'] }],
+          })
+        : await dialog.showSaveDialog({
+            defaultPath: defaultName,
+            filters: [{ name: 'SQLite database', extensions: ['sqlite', 'db'] }],
+          })
+      if (result.canceled || !result.filePath) return null
+      await backup.exportTo(result.filePath)
+      return result.filePath
+    } catch (err) {
+      console.error('[ipc] backup.exportTo', err)
+      throw err
+    }
+  })
 }

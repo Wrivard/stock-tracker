@@ -48,4 +48,10 @@ export const IPC = {
   shell: {
     openExternal: 'shell:openExternal',
   },
+  backup: {
+    list: 'backup:list',
+    runNow: 'backup:runNow',
+    exportTo: 'backup:exportTo',
+    openFolder: 'backup:openFolder',
+  },
 } as const
