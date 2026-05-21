@@ -136,7 +136,7 @@ export default function RebalancePage() {
   return (
     <>
       <Head>
-        <title>{t('rebalance.title')} · Portfolio Tracker</title>
+        <title>{`${t('rebalance.title')} · Portfolio Tracker`}</title>
       </Head>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         <header className="space-y-1">

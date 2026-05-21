@@ -61,7 +61,7 @@ export default function HomePage() {
   return (
     <>
       <Head>
-        <title>{t('nav.dashboard')} · Portfolio Tracker</title>
+        <title>{`${t('nav.dashboard')} · Portfolio Tracker`}</title>
       </Head>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         <header className="space-y-1">

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { Moon, RefreshCw, Sun } from 'lucide-react'
@@ -32,6 +32,11 @@ export function AppHeader() {
   const bumpRefresh = useUi((s) => s.bumpRefresh)
   const { theme, setTheme } = useTheme()
   const [refreshing, setRefreshing] = useState(false)
+  // next-themes resolves the theme client-side only, so the Sun/Moon icon
+  // can't be rendered during SSR/SSG without a hydration mismatch. We delay
+  // the icon until after mount.
+  const [themeMounted, setThemeMounted] = useState(false)
+  useEffect(() => setThemeMounted(true), [])
 
   const handleRefresh = useCallback(async () => {
     if (!apiKeyStatus.finnhub) {
@@ -117,8 +122,13 @@ export function AppHeader() {
               size="icon-sm"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               aria-label="toggle theme"
+              suppressHydrationWarning
             >
-              {theme === 'dark' ? <Sun /> : <Moon />}
+              {themeMounted ? (
+                theme === 'dark' ? <Sun /> : <Moon />
+              ) : (
+                <span className="size-4" />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
