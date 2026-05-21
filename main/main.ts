@@ -1,7 +1,7 @@
 import './services/env'
 
 import path from 'path'
-import { app } from 'electron'
+import { app, globalShortcut } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers/create-window'
 import { closeDb, initDb } from './db/connection'
@@ -40,6 +40,18 @@ if (isProd) {
     mainWindow.webContents.openDevTools()
   }
 
+  // F12 and Ctrl+Shift+I toggle DevTools in both dev and prod so the user
+  // can self-diagnose a broken renderer without needing a console.
+  const toggleDevTools = () => {
+    if (mainWindow.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools()
+    } else {
+      mainWindow.webContents.openDevTools({ mode: 'right' })
+    }
+  }
+  globalShortcut.register('F12', toggleDevTools)
+  globalShortcut.register('CommandOrControl+Shift+I', toggleDevTools)
+
   // Capture today's portfolio snapshot in the background (no-op if already
   // recorded today). Failures are non-fatal — they're logged in console.
   void maybeCaptureDailySnapshot().catch((err) =>
@@ -50,4 +62,8 @@ if (isProd) {
 app.on('window-all-closed', () => {
   closeDb()
   app.quit()
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
 })

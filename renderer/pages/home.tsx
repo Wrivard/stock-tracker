@@ -62,7 +62,9 @@ export default function HomePage() {
       api().portfolio.overview(displayCurrency),
       api().snapshots.list(),
       api().transactions.list(),
-      api().market.portfolioNews().catch(() => ({ items: [], errors: {} })),
+      api()
+        .market.portfolioNews({ cachedOnly: true })
+        .catch(() => ({ items: [], errors: {} })),
       api().settings.list(),
     ])
       .then(([ov, snaps, txs, n, settings]) => {

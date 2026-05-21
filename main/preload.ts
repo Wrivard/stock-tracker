@@ -121,8 +121,8 @@ const api = {
     status: () => ipcRenderer.invoke(IPC.market.status) as Promise<CacheStatus>,
     invalidateQuotes: () =>
       ipcRenderer.invoke(IPC.market.invalidateQuotes) as Promise<void>,
-    portfolioNews: () =>
-      ipcRenderer.invoke(IPC.market.portfolioNews) as Promise<{
+    portfolioNews: (opts?: { cachedOnly?: boolean }) =>
+      ipcRenderer.invoke(IPC.market.portfolioNews, opts) as Promise<{
         items: AnnotatedNewsItem[]
         errors: Record<string, string>
       }>,

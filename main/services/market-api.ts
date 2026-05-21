@@ -148,19 +148,40 @@ export type AnnotatedNewsItem = NewsItem & {
   sectorCode: string | null
 }
 
-// Aggregate news from cached/fresh feeds for every owned ticker. Per-ticker
-// errors are swallowed (e.g. free-tier limitations on certain symbols).
-export async function getPortfolioNews(): Promise<{
+// Aggregate news from cached feeds for every owned ticker.
+//
+// With `cachedOnly: true` (the default) we only read what's already in
+// `api_cache` — no HTTP, no throttle waits. The dashboard / ticker page
+// can render instantly even with N tickers and a cold cache.
+//
+// With `cachedOnly: false` we go through `getNews` (withCache + fetcher),
+// which fetches anything missing or expired. That call respects the
+// Finnhub token bucket, so it can take ~N seconds for N missing tickers.
+// Use it from the News page or a dedicated "Refresh news" action.
+export async function getPortfolioNews(opts?: {
+  cachedOnly?: boolean
+}): Promise<{
   items: AnnotatedNewsItem[]
   errors: Record<string, string>
 }> {
+  const cachedOnly = opts?.cachedOnly ?? true
   const tickers: Ticker[] = _listTickers()
   const items: AnnotatedNewsItem[] = []
   const errors: Record<string, string> = {}
   for (const t of tickers) {
     try {
-      const { data } = await getNews(t.symbol)
-      for (const n of data) items.push({ ...n, tickerName: t.name, sectorCode: null })
+      if (cachedOnly) {
+        const cached = readRaw<import('./types').NewsItem[]>(`news:${t.symbol}`)
+        if (!cached) continue
+        for (const n of cached.data) {
+          items.push({ ...n, tickerName: t.name, sectorCode: null })
+        }
+      } else {
+        const { data } = await getNews(t.symbol)
+        for (const n of data) {
+          items.push({ ...n, tickerName: t.name, sectorCode: null })
+        }
+      }
     } catch (err) {
       errors[t.symbol] = err instanceof Error ? err.message : String(err)
     }

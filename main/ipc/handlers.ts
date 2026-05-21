@@ -168,7 +168,13 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(
     IPC.market.portfolioNews,
-    wrap(() => market.getPortfolioNews()),
+    wrap((opts: unknown) => {
+      const parsed = z
+        .object({ cachedOnly: z.boolean().optional() })
+        .optional()
+        .parse(opts)
+      return market.getPortfolioNews(parsed)
+    }),
   )
 
   ipcMain.handle(IPC.snapshots.list, wrap(() => snapshots.listSnapshots()))

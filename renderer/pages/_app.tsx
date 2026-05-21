@@ -2,6 +2,7 @@ import type { AppProps } from 'next/app'
 import { ThemeProvider } from 'next-themes'
 
 import { AppLayout } from '@/components/layout/AppLayout'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Toaster } from '@/components/ui/sonner'
 import '../styles/globals.css'
 
@@ -13,9 +14,11 @@ function MyApp({ Component, pageProps }: AppProps) {
       enableSystem={false}
       disableTransitionOnChange
     >
-      <AppLayout>
-        <Component {...pageProps} />
-      </AppLayout>
+      <ErrorBoundary>
+        <AppLayout>
+          <Component {...pageProps} />
+        </AppLayout>
+      </ErrorBoundary>
       <Toaster />
     </ThemeProvider>
   )
