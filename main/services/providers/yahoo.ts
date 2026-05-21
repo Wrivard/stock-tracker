@@ -7,6 +7,7 @@ import type {
   EtfHolding,
   HistoricalCandle,
   HistoryPeriod,
+  NewsItem,
   ProviderError,
   Quote,
 } from '../types'
@@ -213,6 +214,38 @@ export async function fetchDailyHistory(
     })
   }
   return candles
+}
+
+// News headlines via the search endpoint. yahoo-finance2's `search`
+// returns both quote matches and recent press for the symbol; we ask
+// for only news (quotesCount: 0) and map onto our NewsItem shape.
+// Summary is left blank because Yahoo's search response doesn't carry
+// article bodies — only the headline + link is reliable.
+export async function fetchNews(symbol: string, count = 10): Promise<NewsItem[]> {
+  await yahooBucket.take(1)
+  try {
+    const r = await yf.search(symbol, { newsCount: count, quotesCount: 0 })
+    const items = r.news ?? []
+    return items
+      .filter((n) => n.title && n.link)
+      .map((n) => ({
+        id: `${symbol}:yahoo:${n.uuid ?? n.link}`,
+        symbol,
+        headline: n.title ?? '',
+        summary: '',
+        source: n.publisher ?? 'Yahoo',
+        url: n.link ?? '',
+        publishedAt: n.providerPublishTime
+          ? new Date(n.providerPublishTime).getTime()
+          : 0,
+        imageUrl: n.thumbnail?.resolutions?.[0]?.url ?? null,
+      }))
+  } catch (err) {
+    throw fail(
+      'unknown',
+      `Yahoo news lookup: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
 }
 
 // ETF holdings + sector weightings via Yahoo's quoteSummary endpoint

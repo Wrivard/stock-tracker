@@ -101,9 +101,25 @@ export async function searchTickers(query: string) {
   )
 }
 
+// News routing: Yahoo first (covers TSX + global), Finnhub as fallback
+// for US tickers when Yahoo returns nothing.
+async function fetchNewsWithFallback(symbol: string): Promise<NewsItem[]> {
+  try {
+    const yahooNews = await yahoo.fetchNews(symbol)
+    if (yahooNews.length > 0) return yahooNews
+  } catch {
+    // fall through
+  }
+  try {
+    return await finnhub.fetchNews(symbol)
+  } catch {
+    return []
+  }
+}
+
 export async function getNews(symbol: string, opts?: { bypass?: boolean }) {
   const sym = symbol.toUpperCase()
-  return withCache<NewsItem[]>(`news:${sym}`, () => finnhub.fetchNews(sym), {
+  return withCache<NewsItem[]>(`news:${sym}`, () => fetchNewsWithFallback(sym), {
     ttlMs: TTL.news,
     staleFallback: true,
     bypass: opts?.bypass,

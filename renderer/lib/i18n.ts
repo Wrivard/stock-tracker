@@ -111,11 +111,16 @@ const dict: Dict = {
   },
   'settings.apiKeys': { fr: 'Cles API', en: 'API keys' },
   'settings.apiKeysHelp': {
-    fr: 'Free tiers — finnhub.io et twelvedata.com. Stockees localement.',
-    en: 'Free tiers — finnhub.io and twelvedata.com. Stored locally.',
+    fr: 'Free tiers — finnhub.io et twelvedata.com. OpenAI (optionnel) pour le recap IA. Stockees localement.',
+    en: 'Free tiers — finnhub.io and twelvedata.com. OpenAI (optional) for the AI recap. Stored locally.',
   },
   'settings.finnhubKey': { fr: 'Cle Finnhub', en: 'Finnhub key' },
   'settings.twelvedataKey': { fr: 'Cle Twelve Data', en: 'Twelve Data key' },
+  'settings.openaiKey': { fr: 'Cle OpenAI (optionnel)', en: 'OpenAI key (optional)' },
+  'settings.openaiHint': {
+    fr: 'Active le recap IA des actualites. gpt-4o-mini, ~0.0005 $ par recap.',
+    en: 'Enables the AI news recap. gpt-4o-mini, ~$0.0005 per recap.',
+  },
   'settings.placeholderHidden': { fr: '••••••••••••', en: '••••••••••••' },
   'settings.preferences': { fr: 'Preferences', en: 'Preferences' },
   'settings.displayCurrency': { fr: "Devise d'affichage", en: 'Display currency' },
@@ -146,6 +151,17 @@ const dict: Dict = {
   'news.empty': {
     fr: 'Aucune actualite. Ajoute des holdings ou actualise pour charger.',
     en: 'No news. Add holdings or click Refresh to load.',
+  },
+  'news.recapButton': { fr: 'Recap IA', en: 'AI recap' },
+  'news.recapBusy': { fr: 'Generation…', en: 'Generating…' },
+  'news.recapTitle': { fr: 'Recap de la semaine', en: 'Weekly recap' },
+  'news.recapNoKey': {
+    fr: 'Cle OpenAI manquante. Configure-la dans Parametres pour activer le recap IA.',
+    en: 'OpenAI key missing. Set it in Settings to enable the AI recap.',
+  },
+  'news.recapMeta': {
+    fr: '{articles} articles · {tickers} tickers · {model}',
+    en: '{articles} articles · {tickers} tickers · {model}',
   },
 
   'onboarding.welcome.title': {

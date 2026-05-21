@@ -15,12 +15,14 @@ beforeEach(() => {
   // Clear env so each test starts clean.
   delete process.env.FINNHUB_API_KEY
   delete process.env.TWELVEDATA_API_KEY
+  delete process.env.OPENAI_API_KEY
 })
 
 afterEach(() => {
   closeTestDb(db)
   delete process.env.FINNHUB_API_KEY
   delete process.env.TWELVEDATA_API_KEY
+  delete process.env.OPENAI_API_KEY
 })
 
 describe('settings-keys.bootstrapApiKeysFromEnv', () => {
@@ -29,6 +31,7 @@ describe('settings-keys.bootstrapApiKeysFromEnv', () => {
     expect(seeded).toEqual([])
     expect(getApiKey('finnhub')).toBeNull()
     expect(getApiKey('twelvedata')).toBeNull()
+    expect(getApiKey('openai')).toBeNull()
   })
 
   it('copies env keys into SQLite when SQLite is empty', () => {
@@ -38,6 +41,13 @@ describe('settings-keys.bootstrapApiKeysFromEnv', () => {
     expect(seeded.sort()).toEqual(['finnhub', 'twelvedata'])
     expect(getApiKey('finnhub')).toBe('fhk_abc123')
     expect(getApiKey('twelvedata')).toBe('tdk_xyz789')
+  })
+
+  it('copies OpenAI key when present', () => {
+    process.env.OPENAI_API_KEY = 'sk-test-openai'
+    const { seeded } = bootstrapApiKeysFromEnv()
+    expect(seeded).toEqual(['openai'])
+    expect(getApiKey('openai')).toBe('sk-test-openai')
   })
 
   it('does not overwrite an existing SQLite key with an env var', () => {

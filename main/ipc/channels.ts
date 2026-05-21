@@ -61,4 +61,7 @@ export const IPC = {
     currentVersion: 'updater:currentVersion',
     quitAndInstall: 'updater:quitAndInstall',
   },
+  ai: {
+    newsRecap: 'ai:newsRecap',
+  },
 } as const

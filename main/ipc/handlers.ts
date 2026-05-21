@@ -21,12 +21,14 @@ import * as market from '../services/market-api'
 import * as portfolio from '../services/portfolio'
 import * as snapshots from '../services/snapshots'
 import * as backup from '../services/backup'
+import { summarizePortfolioWeek } from '../services/ai/recap'
 import { getApiKey, setApiKey } from '../services/settings-keys'
 
 const Currency = z.enum(['USD', 'CAD'])
 const Kind = z.enum(['buy', 'sell'])
 const Period = z.enum(['1M', '3M', '6M', '1Y', 'ALL'])
-const ApiProvider = z.enum(['finnhub', 'twelvedata'])
+const ApiProvider = z.enum(['finnhub', 'twelvedata', 'openai'])
+const Locale = z.enum(['fr', 'en'])
 
 const TickerInputSchema = z.object({
   symbol: z.string().min(1).max(20),
@@ -127,12 +129,15 @@ export function registerIpcHandlers(): void {
       // getter that returns the raw value to the renderer.
       const finnhub = getApiKey('finnhub')
       const twelvedata = getApiKey('twelvedata')
+      const openai = getApiKey('openai')
       const tail = (s: string | null) => (s && s.length >= 4 ? s.slice(-4) : null)
       return {
         finnhub: !!finnhub,
         twelvedata: !!twelvedata,
+        openai: !!openai,
         finnhubTail: tail(finnhub),
         twelvedataTail: tail(twelvedata),
+        openaiTail: tail(openai),
       }
     }),
   )
@@ -220,6 +225,15 @@ export function registerIpcHandlers(): void {
     wrap((displayCurrency: unknown) => {
       const cur = Currency.optional().parse(displayCurrency)
       return portfolio.getPortfolioOverview(cur)
+    }),
+  )
+
+  ipcMain.handle(
+    IPC.ai.newsRecap,
+    wrap((locale: unknown, days: unknown) => {
+      const parsedLocale = Locale.optional().parse(locale) ?? 'fr'
+      const parsedDays = z.number().int().min(1).max(30).optional().parse(days) ?? 7
+      return summarizePortfolioWeek(parsedLocale, parsedDays)
     }),
   )
 

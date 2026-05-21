@@ -12,8 +12,10 @@ interface UiState {
   apiKeyStatus: {
     finnhub: boolean
     twelvedata: boolean
+    openai: boolean
     finnhubTail: string | null
     twelvedataTail: string | null
+    openaiTail: string | null
   }
   initialized: boolean
   // Bump this whenever quotes are refreshed; pages subscribe and refetch.
@@ -45,8 +47,10 @@ export const useUi = create<UiState>((set) => ({
   apiKeyStatus: {
     finnhub: false,
     twelvedata: false,
+    openai: false,
     finnhubTail: null,
     twelvedataTail: null,
+    openaiTail: null,
   },
   initialized: false,
   refreshTick: 0,

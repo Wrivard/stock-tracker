@@ -26,8 +26,9 @@ import type { AnnotatedNewsItem } from './services/market-api'
 import type { PortfolioOverview } from './services/portfolio'
 import type { PortfolioSnapshot } from './services/snapshots'
 import type { BackupInfo } from './services/backup'
+import type { NewsRecapResult } from './services/ai/recap'
 
-type ApiProvider = 'finnhub' | 'twelvedata'
+type ApiProvider = 'finnhub' | 'twelvedata' | 'openai'
 
 const api = {
   sectors: {
@@ -77,8 +78,10 @@ const api = {
       ipcRenderer.invoke(IPC.settings.apiKeyStatus) as Promise<{
         finnhub: boolean
         twelvedata: boolean
+        openai: boolean
         finnhubTail: string | null
         twelvedataTail: string | null
+        openaiTail: string | null
       }>,
     setApiKey: (provider: ApiProvider, value: string) =>
       ipcRenderer.invoke(IPC.settings.setApiKey, provider, value) as Promise<void>,
@@ -152,6 +155,10 @@ const api = {
   shell: {
     openExternal: (url: string) =>
       ipcRenderer.invoke(IPC.shell.openExternal, url) as Promise<void>,
+  },
+  ai: {
+    newsRecap: (locale?: 'fr' | 'en', days?: number) =>
+      ipcRenderer.invoke(IPC.ai.newsRecap, locale, days) as Promise<NewsRecapResult>,
   },
   backup: {
     list: () => ipcRenderer.invoke(IPC.backup.list) as Promise<BackupInfo[]>,

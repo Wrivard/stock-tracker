@@ -2,8 +2,9 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ExternalLink, Newspaper } from 'lucide-react'
+import { ExternalLink, Newspaper, Sparkles } from 'lucide-react'
 
+import type { NewsRecapResult } from '../../main/services/ai/recap'
 import { api } from '@/lib/api'
 import { useUi } from '@/lib/store'
 import { useT } from '@/lib/i18n'
@@ -15,6 +16,13 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -42,11 +50,15 @@ export default function NewsPage() {
   const refreshTick = useUi((s) => s.refreshTick)
   const dataTick = useUi((s) => s.dataTick)
   const initialized = useUi((s) => s.initialized)
+  const apiKeyStatus = useUi((s) => s.apiKeyStatus)
 
   const [items, setItems] = useState<NewsItemView[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>(ALL)
+  const [recapBusy, setRecapBusy] = useState(false)
+  const [recap, setRecap] = useState<NewsRecapResult | null>(null)
+  const [recapOpen, setRecapOpen] = useState(false)
 
   const reload = async () => {
     setLoading(true)
@@ -86,6 +98,23 @@ export default function NewsPage() {
     }
   }
 
+  async function handleRecap() {
+    if (!apiKeyStatus.openai) {
+      toast.error(t('news.recapNoKey'))
+      return
+    }
+    setRecapBusy(true)
+    try {
+      const result = await api().ai.newsRecap(locale, 7)
+      setRecap(result)
+      setRecapOpen(true)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRecapBusy(false)
+    }
+  }
+
   const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
 
   return (
@@ -101,23 +130,37 @@ export default function NewsPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {locale === 'fr'
-                ? 'Articles recents Finnhub pour les tickers du portefeuille.'
-                : 'Recent Finnhub articles for your portfolio tickers.'}
+                ? 'Articles recents (Yahoo + Finnhub) pour les tickers du portefeuille.'
+                : 'Recent articles (Yahoo + Finnhub) for your portfolio tickers.'}
             </p>
           </div>
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-[180px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('news.allTickers')}</SelectItem>
-              {tickers.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            {filter === ALL && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRecap}
+                disabled={recapBusy || !apiKeyStatus.openai}
+                title={!apiKeyStatus.openai ? t('news.recapNoKey') : undefined}
+              >
+                <Sparkles className="size-3.5" />
+                {recapBusy ? t('news.recapBusy') : t('news.recapButton')}
+              </Button>
+            )}
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('news.allTickers')}</SelectItem>
+                {tickers.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </header>
 
         {Object.entries(errors).length > 0 && (
@@ -212,6 +255,52 @@ export default function NewsPage() {
           ))}
         </div>
       </div>
+
+      <Dialog open={recapOpen} onOpenChange={setRecapOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              {t('news.recapTitle')}
+            </DialogTitle>
+            {recap && (
+              <DialogDescription>
+                {t('news.recapMeta', {
+                  articles: recap.articleCount,
+                  tickers: recap.tickerCount,
+                  model: recap.model,
+                })}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {recap && (
+            <div className="space-y-3 text-sm leading-relaxed">
+              {recap.content.split(/\n(?=## )/g).map((block, i) => {
+                const headingMatch = block.match(/^## (.+)\n?/)
+                if (headingMatch) {
+                  const heading = headingMatch[1].trim()
+                  const body = block.slice(headingMatch[0].length).trim()
+                  return (
+                    <section key={i} className="space-y-1">
+                      <h3 className="font-mono text-xs uppercase tracking-wider text-primary">
+                        {heading}
+                      </h3>
+                      <p className="text-muted-foreground whitespace-pre-wrap">
+                        {body}
+                      </p>
+                    </section>
+                  )
+                }
+                return (
+                  <p key={i} className="text-muted-foreground whitespace-pre-wrap">
+                    {block.trim()}
+                  </p>
+                )
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

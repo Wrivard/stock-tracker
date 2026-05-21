@@ -57,10 +57,13 @@ export default function SettingsPage() {
   // the key is saved; pasting a value into the empty input REPLACES it.
   const [finnhubKey, setFinnhubKey] = useState('')
   const [twelvedataKey, setTwelvedataKey] = useState('')
+  const [openaiKey, setOpenaiKey] = useState('')
   const [showFinnhub, setShowFinnhub] = useState(false)
   const [showTwelvedata, setShowTwelvedata] = useState(false)
+  const [showOpenai, setShowOpenai] = useState(false)
   const [savingFinnhub, setSavingFinnhub] = useState(false)
   const [savingTwelvedata, setSavingTwelvedata] = useState(false)
+  const [savingOpenai, setSavingOpenai] = useState(false)
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [backupBusy, setBackupBusy] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('')
@@ -322,6 +325,23 @@ export default function SettingsPage() {
     }
   }
 
+  async function saveOpenai() {
+    if (!openaiKey.trim()) return
+    setSavingOpenai(true)
+    try {
+      await api().settings.setApiKey('openai', openaiKey.trim())
+      await refreshApiKeyStatus()
+      setOpenaiKey('')
+      toast.success(
+        locale === 'fr' ? 'Cle OpenAI enregistree' : 'OpenAI key saved',
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSavingOpenai(false)
+    }
+  }
+
   function openLink(url: string) {
     void api().shell.openExternal(url)
   }
@@ -388,6 +408,26 @@ export default function SettingsPage() {
                   : 'Historical prices (daily candles). Free tier: 800/day, 8/min.'
               }
               inputId="key-twelve"
+            />
+
+            <Separator />
+
+            <KeyRow
+              label={t('settings.openaiKey')}
+              configured={apiKeyStatus.openai}
+              tail={apiKeyStatus.openaiTail}
+              registerUrl="https://platform.openai.com/api-keys"
+              registerLabel="platform.openai.com"
+              openLink={openLink}
+              locale={locale}
+              value={openaiKey}
+              onChange={setOpenaiKey}
+              show={showOpenai}
+              onToggleShow={() => setShowOpenai((v) => !v)}
+              saving={savingOpenai}
+              onSave={saveOpenai}
+              hint={t('settings.openaiHint')}
+              inputId="key-openai"
             />
           </CardContent>
         </Card>
@@ -604,12 +644,12 @@ export default function SettingsPage() {
           <CardContent className="text-sm text-muted-foreground">
             <ul className="list-disc list-inside space-y-1">
               <li>
-                {locale === 'fr' ? 'Version' : 'Version'} 0.1.0
+                {locale === 'fr' ? 'Version' : 'Version'} {appVersion || '…'}
               </li>
               <li>
                 {locale === 'fr'
-                  ? 'Fournisseurs : Finnhub (quotes, profiles, news), Twelve Data (historique), Frankfurter (FX gratuit).'
-                  : 'Providers: Finnhub (quotes, profiles, news), Twelve Data (history), Frankfurter (free FX).'}
+                  ? 'Fournisseurs : Yahoo Finance (quotes, historique, news, ETF), Finnhub (news fallback), Twelve Data (historique fallback), Frankfurter (FX gratuit), OpenAI (recap IA, optionnel).'
+                  : 'Providers: Yahoo Finance (quotes, history, news, ETFs), Finnhub (news fallback), Twelve Data (history fallback), Frankfurter (free FX), OpenAI (AI recap, optional).'}
               </li>
             </ul>
           </CardContent>
