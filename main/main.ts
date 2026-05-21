@@ -9,6 +9,7 @@ import { closeDb, initDb } from './db/connection'
 import { registerIpcHandlers } from './ipc/handlers'
 import { runDailyBackup } from './services/backup'
 import { cleanupExpiredCache } from './services/cache'
+import { bootstrapApiKeysFromEnv } from './services/settings-keys'
 import { maybeCaptureDailySnapshot } from './services/snapshots'
 import { initStartupLog, log } from './util/logger'
 
@@ -79,6 +80,14 @@ function bindLocalShortcuts(win: BrowserWindow) {
 
     initDb()
     log('db initialized')
+
+    // If the user has FINNHUB_API_KEY / TWELVEDATA_API_KEY in .env.local
+    // but never saved via Settings, copy them into SQLite once so the app
+    // doesn't keep nagging about missing keys.
+    const bootstrap = bootstrapApiKeysFromEnv()
+    if (bootstrap.seeded.length > 0) {
+      log('api keys seeded from env', bootstrap)
+    }
 
     registerIpcHandlers()
     log('ipc handlers registered')

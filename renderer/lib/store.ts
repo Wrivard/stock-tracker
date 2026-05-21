@@ -9,7 +9,12 @@ interface UiState {
   displayCurrency: Currency
   locale: Locale
   refreshIntervalSec: number
-  apiKeyStatus: { finnhub: boolean; twelvedata: boolean }
+  apiKeyStatus: {
+    finnhub: boolean
+    twelvedata: boolean
+    finnhubTail: string | null
+    twelvedataTail: string | null
+  }
   initialized: boolean
   // Bump this whenever quotes are refreshed; pages subscribe and refetch.
   refreshTick: number
@@ -37,7 +42,12 @@ export const useUi = create<UiState>((set) => ({
   displayCurrency: 'CAD',
   locale: 'fr',
   refreshIntervalSec: 300,
-  apiKeyStatus: { finnhub: false, twelvedata: false },
+  apiKeyStatus: {
+    finnhub: false,
+    twelvedata: false,
+    finnhubTail: null,
+    twelvedataTail: null,
+  },
   initialized: false,
   refreshTick: 0,
   dataTick: 0,

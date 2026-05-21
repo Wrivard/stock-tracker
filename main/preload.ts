@@ -76,6 +76,8 @@ const api = {
       ipcRenderer.invoke(IPC.settings.apiKeyStatus) as Promise<{
         finnhub: boolean
         twelvedata: boolean
+        finnhubTail: string | null
+        twelvedataTail: string | null
       }>,
     setApiKey: (provider: ApiProvider, value: string) =>
       ipcRenderer.invoke(IPC.settings.setApiKey, provider, value) as Promise<void>,

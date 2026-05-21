@@ -50,6 +50,11 @@ export default function SettingsPage() {
   const refreshApiKeyStatus = useUi((s) => s.refreshApiKeyStatus)
   const { theme, setTheme } = useTheme()
 
+  // The input fields default to EMPTY even when a key is already stored.
+  // Showing the existing key (pre-filled with bullets) only confused the
+  // user into thinking they had to re-enter every launch. Instead, the
+  // badge below the label surfaces "Configurée · ····86tg" so they know
+  // the key is saved; pasting a value into the empty input REPLACES it.
   const [finnhubKey, setFinnhubKey] = useState('')
   const [twelvedataKey, setTwelvedataKey] = useState('')
   const [showFinnhub, setShowFinnhub] = useState(false)
@@ -71,15 +76,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!initialized) return
-    Promise.all([
-      api().settings.get('api.finnhubKey'),
-      api().settings.get('api.twelvedataKey'),
-      api().backup.list(),
-      api().updater.currentVersion(),
-    ])
-      .then(([f, t2, bs, v]) => {
-        if (f) setFinnhubKey(f)
-        if (t2) setTwelvedataKey(t2)
+    Promise.all([api().backup.list(), api().updater.currentVersion()])
+      .then(([bs, v]) => {
         setBackups(bs)
         setAppVersion(v)
       })
@@ -183,11 +181,120 @@ export default function SettingsPage() {
     return `${(n / 1024 / 1024).toFixed(2)} MB`
   }
 
+  interface KeyRowProps {
+    label: string
+    configured: boolean
+    tail: string | null
+    registerUrl: string
+    registerLabel: string
+    openLink: (url: string) => void
+    locale: 'fr' | 'en'
+    value: string
+    onChange: (v: string) => void
+    show: boolean
+    onToggleShow: () => void
+    saving: boolean
+    onSave: () => void
+    hint: string
+    inputId: string
+  }
+
+  function KeyRow({
+    label,
+    configured,
+    tail,
+    registerUrl,
+    registerLabel,
+    openLink,
+    locale,
+    value,
+    onChange,
+    show,
+    onToggleShow,
+    saving,
+    onSave,
+    hint,
+    inputId,
+  }: KeyRowProps) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Label htmlFor={inputId}>{label}</Label>
+            {configured ? (
+              <Badge variant="secondary" className="font-mono text-[10px]">
+                {locale === 'fr' ? 'Configuree' : 'Configured'}
+                {tail ? ` · ····${tail}` : ''}
+              </Badge>
+            ) : (
+              <Badge variant="destructive" className="text-[10px]">
+                {locale === 'fr' ? 'Absente' : 'Missing'}
+              </Badge>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => openLink(registerUrl)}
+          >
+            {registerLabel}
+            <ExternalLink className="size-3" />
+          </Button>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            id={inputId}
+            type={show ? 'text' : 'password'}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={
+              configured
+                ? locale === 'fr'
+                  ? 'Coller une nouvelle cle pour remplacer…'
+                  : 'Paste a new key to replace…'
+                : locale === 'fr'
+                  ? 'Coller ta cle ici…'
+                  : 'Paste your key here…'
+            }
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onToggleShow}
+            aria-label="toggle visibility"
+            disabled={!value}
+          >
+            {show ? <EyeOff /> : <Eye />}
+          </Button>
+          <Button onClick={onSave} disabled={saving || !value.trim()}>
+            <Save />
+            {saving
+              ? '…'
+              : configured
+                ? locale === 'fr'
+                  ? 'Remplacer'
+                  : 'Replace'
+                : locale === 'fr'
+                  ? 'Enregistrer'
+                  : 'Save'}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+    )
+  }
+
   async function saveFinnhub() {
+    if (!finnhubKey.trim()) return
     setSavingFinnhub(true)
     try {
-      await api().settings.setApiKey('finnhub', finnhubKey)
+      await api().settings.setApiKey('finnhub', finnhubKey.trim())
       await refreshApiKeyStatus()
+      setFinnhubKey('') // Clear after save; badge below will show "Configurée"
       toast.success(
         locale === 'fr' ? 'Cle Finnhub enregistree' : 'Finnhub key saved',
       )
@@ -199,10 +306,12 @@ export default function SettingsPage() {
   }
 
   async function saveTwelvedata() {
+    if (!twelvedataKey.trim()) return
     setSavingTwelvedata(true)
     try {
-      await api().settings.setApiKey('twelvedata', twelvedataKey)
+      await api().settings.setApiKey('twelvedata', twelvedataKey.trim())
       await refreshApiKeyStatus()
+      setTwelvedataKey('')
       toast.success(
         locale === 'fr' ? 'Cle Twelve Data enregistree' : 'Twelve Data key saved',
       )
@@ -235,111 +344,51 @@ export default function SettingsPage() {
             <CardDescription>{t('settings.apiKeysHelp')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="key-finnhub">{t('settings.finnhubKey')}</Label>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={apiKeyStatus.finnhub ? 'default' : 'destructive'}
-                  >
-                    {apiKeyStatus.finnhub
-                      ? locale === 'fr' ? 'Configuree' : 'Configured'
-                      : locale === 'fr' ? 'Absente' : 'Missing'}
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => openLink('https://finnhub.io/register')}
-                  >
-                    finnhub.io <ExternalLink className="size-3" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  id="key-finnhub"
-                  type={showFinnhub ? 'text' : 'password'}
-                  value={finnhubKey}
-                  onChange={(e) => setFinnhubKey(e.target.value)}
-                  placeholder="d0..."
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowFinnhub((v) => !v)}
-                  aria-label="toggle visibility"
-                >
-                  {showFinnhub ? <EyeOff /> : <Eye />}
-                </Button>
-                <Button onClick={saveFinnhub} disabled={savingFinnhub}>
-                  <Save />
-                  {savingFinnhub ? t('common.refreshing') : t('common.save')}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {locale === 'fr'
+            <KeyRow
+              label={t('settings.finnhubKey')}
+              configured={apiKeyStatus.finnhub}
+              tail={apiKeyStatus.finnhubTail}
+              registerUrl="https://finnhub.io/register"
+              registerLabel="finnhub.io"
+              openLink={openLink}
+              locale={locale}
+              value={finnhubKey}
+              onChange={setFinnhubKey}
+              show={showFinnhub}
+              onToggleShow={() => setShowFinnhub((v) => !v)}
+              saving={savingFinnhub}
+              onSave={saveFinnhub}
+              hint={
+                locale === 'fr'
                   ? "Quotes temps reel, profils d'entreprise, news. Free tier : 60 calls/min."
-                  : 'Real-time quotes, company profiles, news. Free tier: 60 calls/min.'}
-              </p>
-            </div>
+                  : 'Real-time quotes, company profiles, news. Free tier: 60 calls/min.'
+              }
+              inputId="key-finnhub"
+            />
 
             <Separator />
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="key-twelve">{t('settings.twelvedataKey')}</Label>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={apiKeyStatus.twelvedata ? 'default' : 'destructive'}
-                  >
-                    {apiKeyStatus.twelvedata
-                      ? locale === 'fr' ? 'Configuree' : 'Configured'
-                      : locale === 'fr' ? 'Absente' : 'Missing'}
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => openLink('https://twelvedata.com/register')}
-                  >
-                    twelvedata.com <ExternalLink className="size-3" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  id="key-twelve"
-                  type={showTwelvedata ? 'text' : 'password'}
-                  value={twelvedataKey}
-                  onChange={(e) => setTwelvedataKey(e.target.value)}
-                  placeholder="abc..."
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowTwelvedata((v) => !v)}
-                  aria-label="toggle visibility"
-                >
-                  {showTwelvedata ? <EyeOff /> : <Eye />}
-                </Button>
-                <Button onClick={saveTwelvedata} disabled={savingTwelvedata}>
-                  <Save />
-                  {savingTwelvedata ? t('common.refreshing') : t('common.save')}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {locale === 'fr'
+            <KeyRow
+              label={t('settings.twelvedataKey')}
+              configured={apiKeyStatus.twelvedata}
+              tail={apiKeyStatus.twelvedataTail}
+              registerUrl="https://twelvedata.com/register"
+              registerLabel="twelvedata.com"
+              openLink={openLink}
+              locale={locale}
+              value={twelvedataKey}
+              onChange={setTwelvedataKey}
+              show={showTwelvedata}
+              onToggleShow={() => setShowTwelvedata((v) => !v)}
+              saving={savingTwelvedata}
+              onSave={saveTwelvedata}
+              hint={
+                locale === 'fr'
                   ? 'Prix historiques (chandelles journalieres). Free tier : 800 requetes/jour, 8 par minute.'
-                  : 'Historical prices (daily candles). Free tier: 800/day, 8/min.'}
-              </p>
-            </div>
+                  : 'Historical prices (daily candles). Free tier: 800/day, 8/min.'
+              }
+              inputId="key-twelve"
+            />
           </CardContent>
         </Card>
 

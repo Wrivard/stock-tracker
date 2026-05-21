@@ -120,10 +120,21 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.settings.list, wrap(() => settingsRepo.listSettings()))
   ipcMain.handle(
     IPC.settings.apiKeyStatus,
-    wrap(() => ({
-      finnhub: !!getApiKey('finnhub'),
-      twelvedata: !!getApiKey('twelvedata'),
-    })),
+    wrap(() => {
+      // Surface the last 4 characters of a stored key as a "fingerprint"
+      // the Settings UI can show ("configured · …86tg"). The full key
+      // never leaves the main process — we deliberately do NOT expose a
+      // getter that returns the raw value to the renderer.
+      const finnhub = getApiKey('finnhub')
+      const twelvedata = getApiKey('twelvedata')
+      const tail = (s: string | null) => (s && s.length >= 4 ? s.slice(-4) : null)
+      return {
+        finnhub: !!finnhub,
+        twelvedata: !!twelvedata,
+        finnhubTail: tail(finnhub),
+        twelvedataTail: tail(twelvedata),
+      }
+    }),
   )
   ipcMain.handle(
     IPC.settings.setApiKey,
