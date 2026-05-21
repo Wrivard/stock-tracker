@@ -263,6 +263,13 @@ export async function refreshAll(opts?: { bypass?: boolean }) {
     tickers.map((t) => getNews(t.symbol, opts).catch(() => undefined)),
   )
 
+  // Same idea for history: the Dashboard's Performance card needs cached
+  // candles to compute the 1J/1S/1M/1A period P&Ls. We only fetch 1Y;
+  // that's a superset of every shorter window we expose. Best-effort.
+  await Promise.allSettled(
+    tickers.map((t) => getHistory(t.symbol, '1Y').catch(() => undefined)),
+  )
+
   return out
 }
 

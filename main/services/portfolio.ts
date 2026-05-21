@@ -5,6 +5,7 @@ import { readRaw } from './cache'
 import { getApiKey } from './settings-keys'
 import { getSetting } from '../db/repo/settings'
 import { DEFAULTS, SETTING_KEYS } from './settings-keys'
+import { PERIOD_DAYS, computePeriodPnl } from './performance'
 import type { Currency } from '../db/types'
 import type { FxRate, Quote } from './types'
 
@@ -30,6 +31,14 @@ export interface PortfolioPosition {
   pnlPct: number
   dayPnl: number
   weight: number
+  // Period-bucketed P&L %, computed against the position's value at the
+  // start of each window plus cash flows during it. Null when there's no
+  // history cached for the ticker — the dashboard displays "—" instead
+  // of fabricating a number. `pnlPct` above stays the all-time figure.
+  dayPnlPct: number | null
+  weekPnlPct: number | null
+  monthPnlPct: number | null
+  yearPnlPct: number | null
 }
 
 export interface PortfolioSectorAllocation {
@@ -187,6 +196,21 @@ export function getPortfolioOverview(
       )
     }
 
+    // Period-windowed P&L %. computePeriodPnl reads 1Y cached candles and
+    // walks the txs ledger; it returns null if history hasn't been
+    // fetched yet for this ticker (e.g. before the first Refresh).
+    const periodInput = {
+      qty: h.quantity,
+      // Period math is done in the ticker's NATIVE currency. The card
+      // displays a %, not a dollar value, so display-currency conversion
+      // is irrelevant here.
+      px: quote?.price ?? h.avgCost,
+    }
+    const dayP = computePeriodPnl(h.ticker, periodInput.qty, periodInput.px, PERIOD_DAYS.day)
+    const weekP = computePeriodPnl(h.ticker, periodInput.qty, periodInput.px, PERIOD_DAYS.week)
+    const monthP = computePeriodPnl(h.ticker, periodInput.qty, periodInput.px, PERIOD_DAYS.month)
+    const yearP = computePeriodPnl(h.ticker, periodInput.qty, periodInput.px, PERIOD_DAYS.year)
+
     positions.push({
       ticker: h.ticker,
       name: h.name,
@@ -209,6 +233,10 @@ export function getPortfolioOverview(
       pnlPct,
       dayPnl,
       weight: 0,
+      dayPnlPct: dayP?.periodPnlPct ?? null,
+      weekPnlPct: weekP?.periodPnlPct ?? null,
+      monthPnlPct: monthP?.periodPnlPct ?? null,
+      yearPnlPct: yearP?.periodPnlPct ?? null,
     })
   }
 

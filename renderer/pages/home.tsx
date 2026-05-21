@@ -35,6 +35,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { SectorPieChart } from '@/components/dashboard/SectorPieChart'
 import { TrendSparkline } from '@/components/dashboard/TrendSparkline'
@@ -391,6 +392,29 @@ function SectorTargetsCompact({ sectors, targets, locale }: SectorTargetsCompact
   )
 }
 
+type PerfPeriod = 'day' | 'week' | 'month' | 'year' | 'all'
+
+// Pull the right pnlPct field off a position depending on which period
+// the user picked. `all` keeps the existing avg-cost behavior; the other
+// keys are the period-windowed values computed in portfolio.ts.
+function pnlForPeriod(
+  p: PortfolioOverview['positions'][number],
+  period: PerfPeriod,
+): number | null {
+  switch (period) {
+    case 'day':
+      return p.dayPnlPct
+    case 'week':
+      return p.weekPnlPct
+    case 'month':
+      return p.monthPnlPct
+    case 'year':
+      return p.yearPnlPct
+    case 'all':
+      return p.pnlPct
+  }
+}
+
 function PerformersCard({
   overview,
   locale,
@@ -398,34 +422,92 @@ function PerformersCard({
   overview: PortfolioOverview
   locale: 'fr' | 'en'
 }) {
-  const sortedByPnl = [...overview.positions].sort((a, b) => b.pnlPct - a.pnlPct)
-  const top = sortedByPnl.slice(0, 3)
-  const bottom = sortedByPnl.slice(-3).reverse()
+  const [period, setPeriod] = useState<PerfPeriod>('all')
   const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
+
+  // Positions that have a value for the selected period (i.e. history
+  // cached AND price could be looked up). Tickers without history show
+  // up as null and we exclude them from the top/bottom sort — otherwise
+  // they'd cluster at one end with phantom 0% values.
+  const eligible = overview.positions.filter(
+    (p) => pnlForPeriod(p, period) !== null,
+  )
+  const sorted = [...eligible].sort(
+    (a, b) =>
+      (pnlForPeriod(b, period) as number) - (pnlForPeriod(a, period) as number),
+  )
+  const top = sorted.slice(0, 3)
+  const bottom = sorted.slice(-3).reverse()
+  const missing = overview.positions.length - eligible.length
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">
-          {locale === 'fr' ? 'Performance' : 'Performance'}
-        </CardTitle>
-        <CardDescription className="text-xs">
-          {locale === 'fr' ? 'Top / Bottom par P&L %' : 'Top / Bottom by P&L %'}
-        </CardDescription>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <CardTitle className="text-base">
+              {locale === 'fr' ? 'Performance' : 'Performance'}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {locale === 'fr' ? 'Top / Bottom par P&L %' : 'Top / Bottom by P&L %'}
+            </CardDescription>
+          </div>
+          <Tabs
+            value={period}
+            onValueChange={(v) => setPeriod(v as PerfPeriod)}
+          >
+            <TabsList className="h-7">
+              <TabsTrigger value="day" className="text-xs h-5 px-2">
+                1J
+              </TabsTrigger>
+              <TabsTrigger value="week" className="text-xs h-5 px-2">
+                1S
+              </TabsTrigger>
+              <TabsTrigger value="month" className="text-xs h-5 px-2">
+                1M
+              </TabsTrigger>
+              <TabsTrigger value="year" className="text-xs h-5 px-2">
+                1A
+              </TabsTrigger>
+              <TabsTrigger value="all" className="text-xs h-5 px-2">
+                {locale === 'fr' ? 'Tout' : 'All'}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        <PerformerRow
-          title={locale === 'fr' ? 'Top' : 'Top'}
-          positions={top}
-          locale={lc}
-          tone="positive"
-        />
-        <PerformerRow
-          title={locale === 'fr' ? 'Bottom' : 'Bottom'}
-          positions={bottom}
-          locale={lc}
-          tone="negative"
-        />
+        {eligible.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-4 text-center">
+            {locale === 'fr'
+              ? "Pas d'historique en cache pour cette periode. Clique sur Actualiser dans le header."
+              : 'No history cached for this period. Click Refresh in the header.'}
+          </p>
+        ) : (
+          <>
+            <PerformerRow
+              title={locale === 'fr' ? 'Top' : 'Top'}
+              positions={top}
+              period={period}
+              locale={lc}
+              tone="positive"
+            />
+            <PerformerRow
+              title={locale === 'fr' ? 'Bottom' : 'Bottom'}
+              positions={bottom}
+              period={period}
+              locale={lc}
+              tone="negative"
+            />
+            {missing > 0 && (
+              <p className="text-[10px] text-muted-foreground/70 pt-1">
+                {locale === 'fr'
+                  ? `${missing} ticker(s) sans historique pour cette periode`
+                  : `${missing} ticker(s) without history for this period`}
+              </p>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   )
@@ -434,11 +516,12 @@ function PerformersCard({
 interface PerformerRowProps {
   title: string
   positions: PortfolioOverview['positions']
+  period: PerfPeriod
   locale: string
   tone: 'positive' | 'negative'
 }
 
-function PerformerRow({ title, positions, locale, tone }: PerformerRowProps) {
+function PerformerRow({ title, positions, period, locale, tone }: PerformerRowProps) {
   if (positions.length === 0) return null
   return (
     <div className="space-y-1">
@@ -446,30 +529,33 @@ function PerformerRow({ title, positions, locale, tone }: PerformerRowProps) {
         {title}
       </div>
       <ul className="space-y-0.5">
-        {positions.map((p) => (
-          <li key={p.ticker}>
-            <Link
-              href={{ pathname: '/ticker', query: { symbol: p.ticker } }}
-              className="flex items-center justify-between gap-2 py-1 rounded hover:bg-muted/50 px-1.5 -mx-1.5 transition-colors"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-mono text-xs font-medium">{p.ticker}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {p.name ?? p.sectorLabelFr ?? '—'}
-                </span>
-              </div>
-              <span
-                className={cn(
-                  'tabular-nums font-medium text-xs',
-                  tone === 'positive' ? 'text-positive' : 'text-negative',
-                )}
+        {positions.map((p) => {
+          const pct = pnlForPeriod(p, period) ?? 0
+          return (
+            <li key={p.ticker}>
+              <Link
+                href={{ pathname: '/ticker', query: { symbol: p.ticker } }}
+                className="flex items-center justify-between gap-2 py-1 rounded hover:bg-muted/50 px-1.5 -mx-1.5 transition-colors"
               >
-                {p.pnlPct >= 0 ? '+' : ''}
-                {formatPercent(p.pnlPct / 100, locale)}
-              </span>
-            </Link>
-          </li>
-        ))}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono text-xs font-medium">{p.ticker}</span>
+                  <span className="text-muted-foreground truncate text-xs">
+                    {p.name ?? p.sectorLabelFr ?? '—'}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    'tabular-nums font-medium text-xs',
+                    tone === 'positive' ? 'text-positive' : 'text-negative',
+                  )}
+                >
+                  {pct >= 0 ? '+' : ''}
+                  {formatPercent(pct / 100, locale)}
+                </span>
+              </Link>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
