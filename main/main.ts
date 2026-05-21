@@ -1,7 +1,7 @@
 import './services/env'
 
 import path from 'path'
-import { app, dialog, type BrowserWindow } from 'electron'
+import { Menu, app, dialog, type BrowserWindow } from 'electron'
 import serve from 'electron-serve'
 import electronUpdaterPkg from 'electron-updater'
 import { createWindow } from './helpers/create-window'
@@ -92,6 +92,14 @@ function bindLocalShortcuts(win: BrowserWindow) {
 
     registerIpcHandlers()
     log('ipc handlers registered')
+
+    // Hide the default Electron application menu (File / Edit / View /
+    // Window). This app's nav lives entirely in the sidebar + header, so
+    // the OS menu was just visual noise. Passing null also disables the
+    // default shortcuts (Ctrl+R reload, Ctrl+W close, etc.); the ones we
+    // care about (DevTools toggle) are wired explicitly in
+    // bindLocalShortcuts below.
+    Menu.setApplicationMenu(null)
 
     mainWindow = createWindow('main', {
       width: 1280,

@@ -223,17 +223,31 @@ export default function HoldingsPage() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell
+                      className={cn(
+                        'text-right tabular-nums',
+                        p.changePercent !== null && p.changePercent > 0 &&
+                          'text-positive',
+                        p.changePercent !== null && p.changePercent < 0 &&
+                          'text-negative',
+                      )}
+                    >
                       {p.changePercent !== null ? (
-                        <span
-                          className={cn(
-                            p.changePercent > 0 && 'text-positive',
-                            p.changePercent < 0 && 'text-negative',
-                          )}
-                        >
-                          {p.changePercent >= 0 ? '+' : ''}
-                          {formatPercent(p.changePercent / 100, lc)}
-                        </span>
+                        <>
+                          {/* Main line: dollar amount in the display
+                             currency (already converted in portfolio.ts).
+                             Sub line: % move, smaller. Mirrors the
+                             two-line treatment we use on the Gain/perte
+                             column for visual consistency. */}
+                          <div>
+                            {p.dayPnl >= 0 ? '+' : ''}
+                            {formatMoney(p.dayPnl, overview.displayCurrency, lc)}
+                          </div>
+                          <div className="text-[10px] opacity-70">
+                            {p.changePercent >= 0 ? '+' : ''}
+                            {formatPercent(p.changePercent / 100, lc)}
+                          </div>
+                        </>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}

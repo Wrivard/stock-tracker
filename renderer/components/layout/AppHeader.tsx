@@ -122,8 +122,18 @@ export function AppHeader() {
         )}
 
         <Select
+          // key={displayCurrency} forces React to unmount/remount the
+          // Select whenever the store's currency changes. Belt-and-
+          // suspenders fix for an issue where clicking CAD left the
+          // trigger stuck on USD — likely a controlled-value desync
+          // between Radix's internal state and the Zustand prop. With
+          // the key swap there's no state to be stale; the new mount
+          // reads the fresh `value`.
+          key={displayCurrency}
           value={displayCurrency}
-          onValueChange={(v) => setDisplayCurrency(v as 'USD' | 'CAD')}
+          onValueChange={(v) => {
+            if (v === 'USD' || v === 'CAD') setDisplayCurrency(v)
+          }}
         >
           <SelectTrigger
             className="h-8 w-[68px] text-xs"
@@ -137,7 +147,13 @@ export function AppHeader() {
           </SelectContent>
         </Select>
 
-        <Select value={locale} onValueChange={(v) => setLocale(v as 'fr' | 'en')}>
+        <Select
+          key={locale}
+          value={locale}
+          onValueChange={(v) => {
+            if (v === 'fr' || v === 'en') setLocale(v)
+          }}
+        >
           <SelectTrigger
             className="h-8 w-[60px] text-xs"
             aria-label="language"

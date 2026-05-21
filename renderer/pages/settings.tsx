@@ -501,10 +501,11 @@ export default function SettingsPage() {
             <div className="grid gap-2">
               <Label>{t('settings.displayCurrency')}</Label>
               <Select
+                key={displayCurrency}
                 value={displayCurrency}
-                onValueChange={(v) =>
-                  setDisplayCurrency(v as 'CAD' | 'USD')
-                }
+                onValueChange={(v) => {
+                  if (v === 'USD' || v === 'CAD') setDisplayCurrency(v)
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -518,8 +519,11 @@ export default function SettingsPage() {
             <div className="grid gap-2">
               <Label>{t('settings.locale')}</Label>
               <Select
+                key={locale}
                 value={locale}
-                onValueChange={(v) => setLocale(v as 'fr' | 'en')}
+                onValueChange={(v) => {
+                  if (v === 'fr' || v === 'en') setLocale(v)
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
