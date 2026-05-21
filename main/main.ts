@@ -8,7 +8,8 @@ import { createWindow } from './helpers/create-window'
 import { closeDb, initDb } from './db/connection'
 import { registerIpcHandlers } from './ipc/handlers'
 import { runDailyBackup } from './services/backup'
-import { cleanupExpiredCache } from './services/cache'
+import { cleanupExpiredCache, invalidate } from './services/cache'
+import { getSetting, setSetting } from './db/repo/settings'
 import { bootstrapApiKeysFromEnv } from './services/settings-keys'
 import { maybeCaptureDailySnapshot } from './services/snapshots'
 import { initStartupLog, log } from './util/logger'
@@ -179,6 +180,24 @@ function bindLocalShortcuts(win: BrowserWindow) {
       log('cache cleanup', purged)
     } catch (err) {
       log('cache cleanup failed', err instanceof Error ? err : { err: String(err) })
+    }
+
+    // Post-update hygiene. When the installed app version changes (either
+    // a fresh install or an electron-updater install-on-quit), wipe the
+    // news cache so the next refresh re-fetches with whatever filter or
+    // routing the new version ships. Without this, a user who upgrades
+    // to a build that changed provider behavior keeps seeing the old
+    // cached results for up to 30 min (the news TTL).
+    try {
+      const currentVersion = app.getVersion()
+      const lastSeen = getSetting('app.lastSeenVersion')
+      if (lastSeen !== currentVersion) {
+        invalidate('news:')
+        setSetting('app.lastSeenVersion', currentVersion)
+        log('post-update: invalidated news cache', { from: lastSeen, to: currentVersion })
+      }
+    } catch (err) {
+      log('post-update hook failed', err instanceof Error ? err : { err: String(err) })
     }
     void maybeCaptureDailySnapshot().catch((err) =>
       log('snapshot capture failed', err instanceof Error ? err : { err: String(err) }),
