@@ -63,7 +63,11 @@ export default function NewsPage() {
   const reload = async () => {
     setLoading(true)
     try {
-      const data = await api().market.portfolioNews()
+      // Pass cachedOnly: false so the renderer triggers a live Yahoo fetch
+      // when the news cache is empty (typical on first launch). withCache
+      // still honors its 30 min TTL so this doesn't spam — repeat loads
+      // within the window serve from SQLite.
+      const data = await api().market.portfolioNews({ cachedOnly: false })
       setItems(data.items)
       setErrors(data.errors)
     } catch (err) {

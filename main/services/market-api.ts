@@ -254,6 +254,15 @@ export async function refreshAll(opts?: { bypass?: boolean }) {
   for (const t of tickers) {
     out[t.symbol] = await refreshTicker(t.symbol, opts)
   }
+
+  // Also warm the news cache for every ticker, best-effort. Without this
+  // the global "Refresh" never populates the News page — the cache only
+  // gets filled when the user visits a ticker detail page. Errors are
+  // swallowed: news is nice-to-have, not blocking the quote refresh.
+  await Promise.allSettled(
+    tickers.map((t) => getNews(t.symbol, opts).catch(() => undefined)),
+  )
+
   return out
 }
 
