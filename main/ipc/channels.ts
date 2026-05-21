@@ -46,6 +46,7 @@ export const IPC = {
   },
   portfolio: {
     overview: 'portfolio:overview',
+    timeSeries: 'portfolio:timeSeries',
   },
   shell: {
     openExternal: 'shell:openExternal',

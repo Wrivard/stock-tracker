@@ -37,6 +37,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { KpiCard } from '@/components/dashboard/KpiCard'
+import { PortfolioPerformanceChart } from '@/components/dashboard/PortfolioPerformanceChart'
 import { SectorPieChart } from '@/components/dashboard/SectorPieChart'
 import { TrendSparkline } from '@/components/dashboard/TrendSparkline'
 
@@ -247,6 +248,9 @@ export default function HomePage() {
                     {t('dashboard.noQuotes')}
                   </div>
                 )}
+
+                {/* Portfolio performance chart with 1J / 1S / 1M / 1A / Tout tabs */}
+                <PortfolioPerformanceChart locale={locale} />
 
                 {/* Allocation + Sector targets */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

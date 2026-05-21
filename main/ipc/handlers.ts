@@ -19,6 +19,7 @@ import * as tickersRepo from '../db/repo/tickers'
 import * as txRepo from '../db/repo/transactions'
 import * as market from '../services/market-api'
 import * as portfolio from '../services/portfolio'
+import * as timeseries from '../services/timeseries'
 import * as snapshots from '../services/snapshots'
 import * as backup from '../services/backup'
 import { summarizePortfolioWeek } from '../services/ai/recap'
@@ -30,6 +31,7 @@ const Kind = z.enum(['buy', 'sell'])
 const Period = z.enum(['1M', '3M', '6M', '1Y', 'ALL'])
 const ApiProvider = z.enum(['finnhub', 'twelvedata', 'openai'])
 const Locale = z.enum(['fr', 'en'])
+const TimeSeriesPeriod = z.enum(['day', 'week', 'month', 'year', 'all'])
 
 const TickerInputSchema = z.object({
   symbol: z.string().min(1).max(20),
@@ -242,6 +244,15 @@ export function registerIpcHandlers(): void {
     wrap((displayCurrency: unknown) => {
       const cur = Currency.optional().parse(displayCurrency)
       return portfolio.getPortfolioOverview(cur)
+    }),
+  )
+
+  ipcMain.handle(
+    IPC.portfolio.timeSeries,
+    wrap((period: unknown, displayCurrency: unknown) => {
+      const p = TimeSeriesPeriod.parse(period)
+      const cur = Currency.optional().parse(displayCurrency)
+      return timeseries.computePortfolioTimeSeries(p, cur)
     }),
   )
 

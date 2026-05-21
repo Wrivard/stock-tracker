@@ -24,6 +24,10 @@ import type {
 import type { CachedEntry } from './services/cache'
 import type { AnnotatedNewsItem } from './services/market-api'
 import type { PortfolioOverview } from './services/portfolio'
+import type {
+  PortfolioTimeSeriesResult,
+  TimeSeriesPeriod,
+} from './services/timeseries'
 import type { PortfolioSnapshot } from './services/snapshots'
 import type { BackupInfo } from './services/backup'
 import type { NewsRecapResult } from './services/ai/recap'
@@ -152,6 +156,8 @@ const api = {
   portfolio: {
     overview: (displayCurrency?: Currency) =>
       ipcRenderer.invoke(IPC.portfolio.overview, displayCurrency) as Promise<PortfolioOverview>,
+    timeSeries: (period: TimeSeriesPeriod, displayCurrency?: Currency) =>
+      ipcRenderer.invoke(IPC.portfolio.timeSeries, period, displayCurrency) as Promise<PortfolioTimeSeriesResult>,
   },
   shell: {
     openExternal: (url: string) =>
