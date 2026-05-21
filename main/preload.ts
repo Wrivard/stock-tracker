@@ -18,6 +18,7 @@ import type {
   NewsItem,
   Profile,
   Quote,
+  SymbolSearchResult,
 } from './services/types'
 import type { CachedEntry } from './services/cache'
 import type { AnnotatedNewsItem } from './services/market-api'
@@ -127,6 +128,10 @@ const api = {
         items: AnnotatedNewsItem[]
         errors: Record<string, string>
       }>,
+    search: (query: string) =>
+      ipcRenderer.invoke(IPC.market.search, query) as Promise<
+        CachedEntry<SymbolSearchResult[]>
+      >,
   },
   snapshots: {
     list: () => ipcRenderer.invoke(IPC.snapshots.list) as Promise<PortfolioSnapshot[]>,

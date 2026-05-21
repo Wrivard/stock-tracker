@@ -1,6 +1,12 @@
 import { finnhubBucket } from '../throttle'
 import { getApiKey } from '../settings-keys'
-import type { NewsItem, ProviderError, Profile, Quote } from '../types'
+import type {
+  NewsItem,
+  ProviderError,
+  Profile,
+  Quote,
+  SymbolSearchResult,
+} from '../types'
 import type { Currency } from '../../db/types'
 
 const BASE = 'https://finnhub.io/api/v1'
@@ -120,6 +126,37 @@ interface FinnhubNews {
 function isoDaysAgo(days: number): string {
   const d = new Date(Date.now() - days * 86_400_000)
   return d.toISOString().slice(0, 10)
+}
+
+interface FinnhubSearchResponse {
+  count: number
+  result: Array<{
+    description: string
+    displaySymbol: string
+    symbol: string
+    type: string
+  }>
+}
+
+export async function searchSymbols(query: string): Promise<SymbolSearchResult[]> {
+  const key = requireKey()
+  const trimmed = query.trim()
+  if (trimmed.length < 1) return []
+  const data = await get<FinnhubSearchResponse>(
+    `/search?q=${encodeURIComponent(trimmed)}&token=${key}`,
+  )
+  if (!data || !Array.isArray(data.result)) return []
+  // Filter out garbage entries: Finnhub returns empty-displaySymbol results
+  // for OTC / delisted in some cases. Cap to 15 for the dropdown.
+  return data.result
+    .filter((r) => r.symbol && r.displaySymbol)
+    .slice(0, 15)
+    .map((r) => ({
+      symbol: r.symbol,
+      displaySymbol: r.displaySymbol,
+      description: r.description,
+      type: r.type,
+    }))
 }
 
 export async function fetchNews(symbol: string, days = 14): Promise<NewsItem[]> {

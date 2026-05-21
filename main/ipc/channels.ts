@@ -37,6 +37,7 @@ export const IPC = {
     status: 'market:status',
     invalidateQuotes: 'market:invalidateQuotes',
     portfolioNews: 'market:portfolioNews',
+    search: 'market:search',
   },
   snapshots: {
     list: 'snapshots:list',

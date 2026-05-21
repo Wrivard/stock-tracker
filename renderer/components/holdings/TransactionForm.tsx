@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 
 import type {
   Currency,
@@ -6,6 +7,8 @@ import type {
   TransactionInput,
   TransactionKind,
 } from '../../../main/db/types'
+import type { SymbolSearchResult } from '../../../main/services/types'
+import { api } from '@/lib/api'
 import { todayIsoDate } from '@/lib/format'
 import { useT } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
@@ -26,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { TickerCombobox } from './TickerCombobox'
 
 interface FormState {
   ticker: string
@@ -84,11 +88,37 @@ export function TransactionForm({
   const [form, setForm] = useState<FormState>(() => defaultsFor(editing, defaultTicker))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [autoFilling, setAutoFilling] = useState(false)
 
   // Reset form whenever the dialog opens or the target transaction changes.
   if (open && form.ticker === '' && editing) {
     // First render after `editing` set — bring values in.
     setForm(defaultsFor(editing, defaultTicker))
+  }
+
+  // When the user picks a real result from the combobox, fetch its profile
+  // to auto-fill the currency. Network calls go through the cache so a
+  // recently-picked ticker resolves instantly.
+  async function handleTickerPick(picked: SymbolSearchResult) {
+    setForm((s) => ({ ...s, ticker: picked.displaySymbol.toUpperCase() }))
+    setAutoFilling(true)
+    try {
+      const { data } = await api().market.profile(picked.displaySymbol)
+      const cur =
+        data.currency === 'CAD' ? 'CAD' : data.currency === 'USD' ? 'USD' : null
+      if (cur) {
+        setForm((s) => ({ ...s, currency: cur }))
+      }
+    } catch (err) {
+      // Non-fatal: keep whatever currency was set, just notify.
+      toast.warning(
+        err instanceof Error
+          ? `Profil indisponible (${err.message})`
+          : 'Profil indisponible',
+      )
+    } finally {
+      setAutoFilling(false)
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -150,17 +180,20 @@ export function TransactionForm({
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label htmlFor="tx-ticker">{t('tx.fields.ticker')}</Label>
-                <Input
-                  id="tx-ticker"
-                  placeholder="AAPL, SHOP.TO"
+                <Label htmlFor="tx-ticker">
+                  {t('tx.fields.ticker')}
+                  {autoFilling && (
+                    <span className="ml-2 text-[10px] text-muted-foreground">
+                      …
+                    </span>
+                  )}
+                </Label>
+                <TickerCombobox
                   value={form.ticker}
-                  onChange={(e) =>
-                    setForm({ ...form, ticker: e.target.value.toUpperCase() })
-                  }
+                  onChange={(v) => setForm((s) => ({ ...s, ticker: v }))}
+                  onPick={handleTickerPick}
                   disabled={!!editing}
                   autoFocus={!editing}
-                  required
                 />
               </div>
               <div className="grid gap-1.5">

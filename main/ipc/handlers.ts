@@ -187,6 +187,13 @@ export function registerIpcHandlers(): void {
       return market.getPortfolioNews(parsed)
     }),
   )
+  ipcMain.handle(
+    IPC.market.search,
+    wrap((query: unknown) => {
+      const q = z.string().max(50).parse(query)
+      return market.searchTickers(q)
+    }),
+  )
 
   ipcMain.handle(IPC.snapshots.list, wrap(() => snapshots.listSnapshots()))
   ipcMain.handle(IPC.snapshots.capture, wrap(() => snapshots.captureDailySnapshot()))

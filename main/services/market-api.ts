@@ -16,6 +16,7 @@ import type {
   NewsItem,
   Profile,
   Quote,
+  SymbolSearchResult,
 } from './types'
 
 const TTL = {
@@ -24,6 +25,7 @@ const TTL = {
   news: 30 * 60_000,    // 30 min
   history: 6 * 3600_000,  // 6 h — daily candles update once/day
   fx: 6 * 3600_000,       // 6 h — daily ECB reference rate
+  search: 60 * 60_000,  // 1 h — symbol universe doesn't change often
 }
 
 export async function getQuote(symbol: string, opts?: { bypass?: boolean }) {
@@ -42,6 +44,26 @@ export async function getProfile(symbol: string, opts?: { bypass?: boolean }) {
     staleFallback: true,
     bypass: opts?.bypass,
   })
+}
+
+// Symbol search powers the ticker autocomplete in the New Transaction
+// dialog. Cached for 1 h per normalized query so rapid typing replays
+// against a warm cache instead of burning Finnhub tokens.
+export async function searchTickers(query: string) {
+  const q = query.trim().toUpperCase()
+  if (q.length === 0) {
+    return {
+      data: [] as SymbolSearchResult[],
+      fetchedAt: Date.now(),
+      expiresAt: Date.now(),
+      stale: false,
+    }
+  }
+  return withCache<SymbolSearchResult[]>(
+    `search:${q}`,
+    () => finnhub.searchSymbols(q),
+    { ttlMs: TTL.search, staleFallback: true },
+  )
 }
 
 export async function getNews(symbol: string, opts?: { bypass?: boolean }) {

@@ -53,6 +53,13 @@ export interface FxRate {
   fetchedAt: number
 }
 
+export interface SymbolSearchResult {
+  symbol: string
+  displaySymbol: string
+  description: string
+  type: string // e.g. "Common Stock", "ETP"
+}
+
 export interface CacheStatus {
   finnhubConfigured: boolean
   twelvedataConfigured: boolean
