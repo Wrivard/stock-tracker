@@ -195,9 +195,17 @@ function bindLocalShortcuts(win: BrowserWindow) {
       autoUpdater.on('update-not-available', (info) =>
         log('updater:up-to-date', { version: info.version }),
       )
-      autoUpdater.on('update-downloaded', (info) =>
-        log('updater:downloaded', { version: info.version }),
-      )
+      autoUpdater.on('update-downloaded', (info) => {
+        log('updater:downloaded', { version: info.version })
+        // Notify the renderer so it can show an in-app toast with a
+        // "Restart now" button. Windows toasts get missed; an in-app
+        // banner that stays put doesn't.
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('updater:downloaded', {
+            version: info.version,
+          })
+        }
+      })
       autoUpdater.on('error', (err) =>
         log('updater:error-event', err instanceof Error ? err : { err: String(err) }),
       )

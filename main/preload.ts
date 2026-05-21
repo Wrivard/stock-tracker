@@ -169,6 +169,16 @@ const api = {
       >,
     quitAndInstall: () =>
       ipcRenderer.invoke(IPC.updater.quitAndInstall) as Promise<void>,
+    // Subscribe to an "update finished downloading, ready to install"
+    // signal pushed by the main process. Returns an unsubscribe fn.
+    onDownloaded: (cb: (payload: { version: string }) => void) => {
+      const channel = 'updater:downloaded'
+      const handler = (_: unknown, payload: { version: string }) => cb(payload)
+      ipcRenderer.on(channel, handler)
+      return () => {
+        ipcRenderer.removeListener(channel, handler)
+      }
+    },
   },
 }
 

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import {
   LayoutDashboard,
@@ -56,6 +56,33 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, [initialized, loadFromBackend])
 
   useAutoRefresh()
+
+  // Persistent in-app toast when electron-updater has pulled a new version.
+  // Easier to notice than the Windows toast, and the action button quits +
+  // installs + relaunches in one shot.
+  const seenVersionRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.api) return
+    const unsubscribe = window.api.updater.onDownloaded(({ version }) => {
+      if (seenVersionRef.current === version) return
+      seenVersionRef.current = version
+      toast(
+        locale === 'fr'
+          ? `Version ${version} prete a installer`
+          : `Version ${version} ready to install`,
+        {
+          duration: Infinity,
+          action: {
+            label: locale === 'fr' ? 'Redemarrer' : 'Restart',
+            onClick: () => {
+              void window.api.updater.quitAndInstall()
+            },
+          },
+        },
+      )
+    })
+    return unsubscribe
+  }, [locale])
 
   // Ctrl/Cmd+N opens the Quick Trade dialog from anywhere. We deliberately
   // skip when the user is typing in an input/select so we don't hijack
