@@ -93,6 +93,19 @@ export default function TickerPage() {
     [position, overview],
   )
 
+  // Performance over the selected period: first candle vs last candle.
+  // Recomputed whenever the user flips tabs or new history lands.
+  const periodPerf = useMemo(() => {
+    const candles = history?.data
+    if (!candles || candles.length < 2) return null
+    const first = candles[0].close
+    const last = candles[candles.length - 1].close
+    if (!Number.isFinite(first) || first <= 0) return null
+    const change = last - first
+    const pct = (change / first) * 100
+    return { change, pct, first, last }
+  }, [history])
+
   useEffect(() => {
     if (!initialized || !symbol) return
     let cancelled = false
@@ -358,9 +371,36 @@ export default function TickerPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <CardTitle className="text-base">
-                    {locale === 'fr' ? 'Cours' : 'Price'}
-                  </CardTitle>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-base">
+                      {locale === 'fr' ? 'Cours' : 'Price'}
+                    </CardTitle>
+                    {periodPerf && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'text-[11px] font-mono tabular-nums',
+                          periodPerf.pct > 0 &&
+                            'text-positive border-positive/40 bg-positive/5',
+                          periodPerf.pct < 0 &&
+                            'text-negative border-negative/40 bg-negative/5',
+                          periodPerf.pct === 0 && 'text-muted-foreground',
+                        )}
+                        title={
+                          locale === 'fr'
+                            ? `Variation sur la periode ${period}`
+                            : `Period ${period} change`
+                        }
+                      >
+                        {periodPerf.pct >= 0 ? '+' : ''}
+                        {formatPercent(periodPerf.pct / 100, lc)}
+                        <span className="opacity-70 ml-1">
+                          ({periodPerf.change >= 0 ? '+' : ''}
+                          {formatMoney(periodPerf.change, currency, lc)})
+                        </span>
+                      </Badge>
+                    )}
+                  </div>
                   <CardDescription className="text-xs">
                     {history?.fetchedAt
                       ? `${locale === 'fr' ? 'Donnees' : 'Data'} · ${formatRelativeTime(history.fetchedAt, locale)}${history.stale ? ` · ${t('common.stale').toLowerCase()}` : ''}`
