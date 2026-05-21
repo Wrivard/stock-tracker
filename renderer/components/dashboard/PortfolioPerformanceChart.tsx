@@ -17,8 +17,8 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ChartSkeleton } from '@/components/dashboard/ChartSkeleton'
 
 const PERIODS: Array<{ key: TimeSeriesPeriod; labelFr: string; labelEn: string }> = [
   { key: 'day', labelFr: '1J', labelEn: '1D' },
@@ -133,7 +133,7 @@ export function PortfolioPerformanceChart({
       </CardHeader>
       <CardContent>
         {showSkeleton ? (
-          <Skeleton className="h-[260px] w-full" />
+          <ChartSkeleton height={260} />
         ) : noPositions ? (
           <p className="text-xs text-muted-foreground py-12 text-center">
             {locale === 'fr'
@@ -141,7 +141,17 @@ export function PortfolioPerformanceChart({
               : 'No history cached for this period. Click Refresh in the header.'}
           </p>
         ) : data && data.points.length > 0 ? (
-          <ChartContainer config={config} className="h-[260px] w-full">
+          // Tailwind v4 arbitrary variant: target only the stroke path
+          // that Recharts renders for the area's curve (NOT the filled
+          // area path, which would create a halo around the whole
+          // shape including the bottom edge at the X axis). The glow
+          // tints with the same CSS var as the line color, so the
+          // green/red switch via `config.value.color` propagates here
+          // automatically.
+          <ChartContainer
+            config={config}
+            className="h-[260px] w-full [&_.recharts-area-curve]:[filter:drop-shadow(0_0_5px_var(--color-value))]"
+          >
             <AreaChart
               data={data.points}
               margin={{ left: 12, right: 12, top: 4, bottom: 0 }}
@@ -213,7 +223,11 @@ export function PortfolioPerformanceChart({
                 fill="url(#portfolioPerfFill)"
                 strokeWidth={2}
                 dot={false}
-                isAnimationActive={false}
+                // Smooth left-to-right draw-in. Short duration so
+                // changing periods feels snappy rather than fancy.
+                isAnimationActive
+                animationDuration={500}
+                animationEasing="ease-out"
               />
             </AreaChart>
           </ChartContainer>
