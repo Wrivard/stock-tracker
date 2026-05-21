@@ -201,6 +201,28 @@ const dict: Dict = {
     fr: 'Aucun snapshot pour l\'instant. Le premier sera enregistre des qu\'un prix sera disponible.',
     en: 'No snapshots yet. The first one will be captured once a quote is available.',
   },
+
+  'import.title': { fr: 'Importer un broker', en: 'Import broker' },
+  'import.help': {
+    fr: 'Charge l\'export "Activities" XLSX de Questrade. On importe les achats et ventes, et on cree automatiquement les tickers inconnus.',
+    en: 'Upload Questrade\'s "Activities" XLSX export. We import buys/sells and auto-create any unknown tickers.',
+  },
+  'import.questradeButton': { fr: 'Importer Questrade', en: 'Import Questrade' },
+  'import.questradeBusy': { fr: 'Import en cours…', en: 'Importing…' },
+  'import.summary': {
+    fr: '{imported} transactions importees · {skippedNonTrade} non-trades ignorees · {skippedInvalid} invalides',
+    en: '{imported} trades imported · {skippedNonTrade} non-trades skipped · {skippedInvalid} invalid',
+  },
+  'import.newTickers': {
+    fr: '{n} nouveaux tickers ajoutes : {list}',
+    en: '{n} new tickers added: {list}',
+  },
+  'import.canceled': { fr: 'Import annule.', en: 'Import canceled.' },
+  'onboarding.import.title': { fr: 'Importer un broker (optionnel)', en: 'Import broker (optional)' },
+  'onboarding.import.body': {
+    fr: 'Charge directement l\'export XLSX de Questrade pour preremplir tes positions. Sinon, passe et saisis manuellement a l\'etape suivante.',
+    en: 'Upload your Questrade XLSX export to prefill your positions. Otherwise, skip and add manually in the next step.',
+  },
 }
 
 export type TKey = keyof typeof dict

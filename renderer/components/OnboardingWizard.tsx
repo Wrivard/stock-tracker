@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  FileSpreadsheet,
   Plus,
 } from 'lucide-react'
 
@@ -24,9 +25,9 @@ interface OnboardingWizardProps {
   onComplete: () => Promise<void>
 }
 
-type Step = 'welcome' | 'keys' | 'tx' | 'targets' | 'done'
+type Step = 'welcome' | 'keys' | 'import' | 'tx' | 'targets' | 'done'
 
-const STEPS: Step[] = ['welcome', 'keys', 'tx', 'targets', 'done']
+const STEPS: Step[] = ['welcome', 'keys', 'import', 'tx', 'targets', 'done']
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const { t, locale } = useT()
@@ -36,6 +37,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [finishing, setFinishing] = useState(false)
   const [txOpen, setTxOpen] = useState(false)
   const [txCreated, setTxCreated] = useState(false)
+  const [importBusy, setImportBusy] = useState(false)
+  const [importedCount, setImportedCount] = useState<number | null>(null)
 
   // Step 2 — keys
   const [finnhub, setFinnhub] = useState('')
@@ -58,11 +61,37 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       if (finnhub.trim() || twelvedata.trim()) {
         toast.success(locale === 'fr' ? 'Cles enregistrees' : 'Keys saved')
       }
-      go('tx')
+      go('import')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setSavingKeys(false)
+    }
+  }
+
+  async function handleImportQuestrade() {
+    setImportBusy(true)
+    try {
+      const result = await api().importBroker.questrade()
+      if (result.canceled) {
+        toast.info(t('import.canceled'))
+        return
+      }
+      const { summary } = result
+      setImportedCount(summary.imported)
+      setTxCreated(summary.imported > 0)
+      toast.success(
+        t('import.summary', {
+          imported: summary.imported,
+          skippedNonTrade: summary.skippedNonTrade,
+          skippedInvalid: summary.skippedInvalid,
+        }),
+      )
+      bumpData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImportBusy(false)
     }
   }
 
@@ -145,6 +174,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <Bullets
               items={[
                 t('onboarding.keys.title'),
+                t('onboarding.import.title'),
                 t('onboarding.tx.title'),
                 t('onboarding.targets.title'),
               ]}
@@ -190,7 +220,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               />
             </div>
             <div className="flex justify-between pt-2">
-              <Button variant="ghost" onClick={() => go('tx')} disabled={savingKeys}>
+              <Button variant="ghost" onClick={() => go('import')} disabled={savingKeys}>
                 {t('onboarding.skip')}
               </Button>
               <Button onClick={saveKeysAndNext} disabled={savingKeys}>
@@ -219,6 +249,54 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                   S&apos;inscrire a Twelve Data (gratuit)
                 </button>
               </p>
+            </div>
+          </div>
+        )}
+
+        {step === 'import' && (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold tracking-tight">
+                {t('onboarding.import.title')}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {t('onboarding.import.body')}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-6 text-center space-y-3">
+              {importedCount !== null && importedCount > 0 ? (
+                <div className="space-y-2">
+                  <Check className="size-8 text-positive mx-auto" />
+                  <p className="text-sm">
+                    {locale === 'fr'
+                      ? `${importedCount} transactions importees.`
+                      : `${importedCount} trades imported.`}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {locale === 'fr'
+                      ? 'Export "Activities" XLSX depuis Questrade.'
+                      : 'Questrade "Activities" XLSX export.'}
+                  </p>
+                  <Button onClick={handleImportQuestrade} disabled={importBusy}>
+                    <FileSpreadsheet className="size-3.5" />
+                    {importBusy
+                      ? t('import.questradeBusy')
+                      : t('import.questradeButton')}
+                  </Button>
+                </>
+              )}
+            </div>
+            <div className="flex justify-between">
+              <Button variant="ghost" onClick={() => go('tx')} disabled={importBusy}>
+                {t('onboarding.skip')}
+              </Button>
+              <Button onClick={() => go('tx')} disabled={importBusy}>
+                {t('onboarding.next')}
+                <ArrowRight className="size-3.5" />
+              </Button>
             </div>
           </div>
         )}

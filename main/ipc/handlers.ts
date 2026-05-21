@@ -22,6 +22,7 @@ import * as portfolio from '../services/portfolio'
 import * as snapshots from '../services/snapshots'
 import * as backup from '../services/backup'
 import { summarizePortfolioWeek } from '../services/ai/recap'
+import { importQuestradeXlsx } from '../services/import-questrade'
 import { getApiKey, setApiKey } from '../services/settings-keys'
 
 const Currency = z.enum(['USD', 'CAD'])
@@ -288,6 +289,35 @@ export function registerIpcHandlers(): void {
       }
     }),
   )
+
+  // Pop an Open File dialog for a Questrade XLSX export and pass the path
+  // to the parser. We return either { canceled: true } when the user
+  // dismisses the dialog or the ImportSummary. Renderers never see the
+  // raw file bytes.
+  ipcMain.handle(IPC.importBroker.questrade, async (event: IpcMainInvokeEvent) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      const opts = {
+        title: 'Importer un fichier Questrade',
+        properties: ['openFile' as const],
+        filters: [
+          { name: 'Excel', extensions: ['xlsx'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      }
+      const result = win
+        ? await dialog.showOpenDialog(win, opts)
+        : await dialog.showOpenDialog(opts)
+      if (result.canceled || result.filePaths.length === 0) {
+        return { canceled: true as const }
+      }
+      const summary = importQuestradeXlsx(result.filePaths[0])
+      return { canceled: false as const, summary }
+    } catch (err) {
+      console.error('[ipc] import.questrade', err)
+      throw err
+    }
+  })
 
   // Save dialog needs the sender's window to be modal — fall back to no
   // window if we can't resolve one (still works, just not modal).

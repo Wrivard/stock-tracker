@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
+  FileSpreadsheet,
   FolderOpen,
   HardDriveDownload,
   RotateCcw,
@@ -66,6 +67,8 @@ export default function SettingsPage() {
   const [savingOpenai, setSavingOpenai] = useState(false)
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [backupBusy, setBackupBusy] = useState(false)
+  const [importBusy, setImportBusy] = useState(false)
+  const bumpData = useUi((s) => s.bumpData)
   const [appVersion, setAppVersion] = useState<string>('')
   const [updateBusy, setUpdateBusy] = useState(false)
   const [updateState, setUpdateState] = useState<
@@ -175,6 +178,42 @@ export default function SettingsPage() {
       await api().backup.openFolder()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function handleImportQuestrade() {
+    setImportBusy(true)
+    try {
+      const result = await api().importBroker.questrade()
+      if (result.canceled) {
+        toast.info(t('import.canceled'))
+        return
+      }
+      const { summary } = result
+      toast.success(
+        t('import.summary', {
+          imported: summary.imported,
+          skippedNonTrade: summary.skippedNonTrade,
+          skippedInvalid: summary.skippedInvalid,
+        }),
+      )
+      if (summary.newTickers.length > 0) {
+        toast.info(
+          t('import.newTickers', {
+            n: summary.newTickers.length,
+            list: summary.newTickers.slice(0, 10).join(', ') +
+              (summary.newTickers.length > 10 ? '…' : ''),
+          }),
+        )
+      }
+      if (summary.skippedInvalid > 0 && summary.invalidReasons.length > 0) {
+        toast.warning(summary.invalidReasons.join(' · '))
+      }
+      bumpData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImportBusy(false)
     }
   }
 
@@ -567,6 +606,26 @@ export default function SettingsPage() {
               )}
             </CardContent>
           )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle>{t('import.title')}</CardTitle>
+                <CardDescription>{t('import.help')}</CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleImportQuestrade}
+                disabled={importBusy}
+              >
+                <FileSpreadsheet />
+                {importBusy ? t('import.questradeBusy') : t('import.questradeButton')}
+              </Button>
+            </div>
+          </CardHeader>
         </Card>
 
         <Card>

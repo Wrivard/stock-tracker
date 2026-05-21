@@ -64,4 +64,7 @@ export const IPC = {
   ai: {
     newsRecap: 'ai:newsRecap',
   },
+  importBroker: {
+    questrade: 'import:questrade',
+  },
 } as const

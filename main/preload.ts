@@ -27,6 +27,7 @@ import type { PortfolioOverview } from './services/portfolio'
 import type { PortfolioSnapshot } from './services/snapshots'
 import type { BackupInfo } from './services/backup'
 import type { NewsRecapResult } from './services/ai/recap'
+import type { ImportSummary } from './services/import-questrade'
 
 type ApiProvider = 'finnhub' | 'twelvedata' | 'openai'
 
@@ -159,6 +160,13 @@ const api = {
   ai: {
     newsRecap: (locale?: 'fr' | 'en', days?: number) =>
       ipcRenderer.invoke(IPC.ai.newsRecap, locale, days) as Promise<NewsRecapResult>,
+  },
+  importBroker: {
+    questrade: () =>
+      ipcRenderer.invoke(IPC.importBroker.questrade) as Promise<
+        | { canceled: true }
+        | { canceled: false; summary: ImportSummary }
+      >,
   },
   backup: {
     list: () => ipcRenderer.invoke(IPC.backup.list) as Promise<BackupInfo[]>,

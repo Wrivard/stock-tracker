@@ -1,0 +1,253 @@
+import { unlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import * as XLSX from 'xlsx'
+import type Database from 'better-sqlite3'
+
+import { closeTestDb, makeTestDb } from './helpers/db'
+import { importQuestradeXlsx } from '../main/services/import-questrade'
+import { listTransactions } from '../main/db/repo/transactions'
+import { listTickers } from '../main/db/repo/tickers'
+
+let db: Database.Database
+
+beforeEach(() => {
+  db = makeTestDb()
+})
+
+afterEach(() => {
+  closeTestDb(db)
+})
+
+// Headers Questrade emits in its real "Activities" export, used verbatim.
+const HEADERS = [
+  'Transaction Date',
+  'Settlement Date',
+  'Action',
+  'Symbol',
+  'Description',
+  'Quantity',
+  'Price',
+  'Gross Amount',
+  'Commission',
+  'Net Amount',
+  'Currency',
+  'Account #',
+  'Activity Type',
+  'Account Type',
+]
+
+function writeWorkbook(rows: Array<Record<string, string | number>>): string {
+  const ws = XLSX.utils.json_to_sheet(rows, { header: HEADERS })
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Activities')
+  const path = join(tmpdir(), `qt-import-${Date.now()}-${Math.random()}.xlsx`)
+  XLSX.writeFile(wb, path)
+  return path
+}
+
+describe('import-questrade.importQuestradeXlsx', () => {
+  it('imports buys and sells, skips non-trade rows', () => {
+    const path = writeWorkbook([
+      // A buy (positive quantity, negative cash).
+      {
+        'Transaction Date': '2025-08-18 12:00:00 AM',
+        'Settlement Date': '2025-08-19 12:00:00 AM',
+        'Action': 'Buy',
+        'Symbol': 'SBET',
+        'Description': 'SHARPLINK GAMING',
+        'Quantity': '95.00000',
+        'Price': '20.96880000',
+        'Gross Amount': '-1992.04',
+        'Commission': '0.00',
+        'Net Amount': '-1992.04',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual FHSA',
+      },
+      // A sell (quantity is negative in Questrade exports).
+      {
+        'Transaction Date': '2025-07-25 12:00:00 AM',
+        'Settlement Date': '2025-07-28 12:00:00 AM',
+        'Action': 'Sell',
+        'Symbol': 'GME',
+        'Description': 'GAMESTOP CORP',
+        'Quantity': '-2.00000',
+        'Price': '23.57270000',
+        'Gross Amount': '47.15',
+        'Commission': '0.00',
+        'Net Amount': '47.15',
+        'Currency': 'USD',
+        'Account #': '52278815',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual TFSA',
+      },
+      // An FX conversion (should be skipped).
+      {
+        'Transaction Date': '2025-08-18 12:00:00 AM',
+        'Settlement Date': '2025-08-18 12:00:00 AM',
+        'Action': 'FXT',
+        'Symbol': '',
+        'Description': 'CONVERSION - CAD/USD',
+        'Quantity': '0.00000',
+        'Price': '0.00000000',
+        'Gross Amount': '0.00',
+        'Commission': '0.00',
+        'Net Amount': '1992.04',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'FX conversion',
+        'Account Type': 'Individual FHSA',
+      },
+      // A deposit (should be skipped).
+      {
+        'Transaction Date': '2025-08-18 12:00:00 AM',
+        'Settlement Date': '2025-08-18 12:00:00 AM',
+        'Action': 'CON',
+        'Symbol': '',
+        'Description': 'FHSA CONTRIBUTION',
+        'Quantity': '0.00000',
+        'Price': '0.00000000',
+        'Gross Amount': '0.00',
+        'Commission': '0.00',
+        'Net Amount': '2800.00',
+        'Currency': 'CAD',
+        'Account #': '53543085',
+        'Activity Type': 'Deposits',
+        'Account Type': 'Individual FHSA',
+      },
+    ])
+    try {
+      const summary = importQuestradeXlsx(path)
+      expect(summary.imported).toBe(2)
+      expect(summary.skippedNonTrade).toBe(2)
+      expect(summary.skippedInvalid).toBe(0)
+      expect(summary.newTickers.sort()).toEqual(['GME', 'SBET'])
+      expect(summary.byAccount).toEqual({
+        'Individual FHSA': 1,
+        'Individual TFSA': 1,
+      })
+
+      const txs = listTransactions().sort((a, b) =>
+        a.ticker.localeCompare(b.ticker),
+      )
+      expect(txs).toHaveLength(2)
+      const gme = txs.find((t) => t.ticker === 'GME')!
+      const sbet = txs.find((t) => t.ticker === 'SBET')!
+      // Sell quantity is normalized to its absolute magnitude.
+      expect(gme.kind).toBe('sell')
+      expect(gme.quantity).toBe(2)
+      expect(gme.price).toBeCloseTo(23.5727, 4)
+      expect(gme.occurredAt).toBe('2025-07-25')
+      expect(sbet.kind).toBe('buy')
+      expect(sbet.quantity).toBe(95)
+      expect(sbet.price).toBeCloseTo(20.9688, 4)
+      expect(sbet.fees).toBe(0)
+      expect(sbet.occurredAt).toBe('2025-08-18')
+      // Tickers were auto-created with the trade currency.
+      const tickers = listTickers()
+      expect(tickers.find((t) => t.symbol === 'SBET')?.currency).toBe('USD')
+    } finally {
+      unlinkSync(path)
+    }
+  })
+
+  it('reports invalid rows without aborting the whole import', () => {
+    const path = writeWorkbook([
+      {
+        'Transaction Date': '2025-08-18 12:00:00 AM',
+        'Settlement Date': '2025-08-19 12:00:00 AM',
+        'Action': 'Buy',
+        'Symbol': 'AAPL',
+        'Description': 'APPLE',
+        'Quantity': '10',
+        'Price': '180.00',
+        'Gross Amount': '-1800.00',
+        'Commission': '-9.95',
+        'Net Amount': '-1809.95',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual FHSA',
+      },
+      // Bad quantity — should be flagged as invalid.
+      {
+        'Transaction Date': '2025-08-19 12:00:00 AM',
+        'Settlement Date': '2025-08-20 12:00:00 AM',
+        'Action': 'Buy',
+        'Symbol': 'MSFT',
+        'Description': 'MICROSOFT',
+        'Quantity': 'nope',
+        'Price': '400.00',
+        'Gross Amount': '0.00',
+        'Commission': '0.00',
+        'Net Amount': '0.00',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual FHSA',
+      },
+    ])
+    try {
+      const summary = importQuestradeXlsx(path)
+      expect(summary.imported).toBe(1)
+      expect(summary.skippedInvalid).toBe(1)
+      // Commission magnitude was preserved (positive).
+      const tx = listTransactions()[0]
+      expect(tx.fees).toBeCloseTo(9.95, 2)
+    } finally {
+      unlinkSync(path)
+    }
+  })
+
+  it('throws on a workbook missing required headers', () => {
+    const ws = XLSX.utils.json_to_sheet([{ Foo: 'bar', Baz: 'qux' }])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet')
+    const path = join(tmpdir(), `qt-bad-${Date.now()}.xlsx`)
+    XLSX.writeFile(wb, path)
+    try {
+      expect(() => importQuestradeXlsx(path)).toThrow(/missing expected/i)
+    } finally {
+      unlinkSync(path)
+    }
+  })
+
+  it('is idempotent enough to handle a second pass (creates duplicates)', () => {
+    // Documents the current behavior: re-importing the same file inserts
+    // duplicates. We don't dedupe by (ticker,date,quantity,price) yet —
+    // the user should backup first or only import once. This test pins
+    // the behavior so a future change is intentional.
+    const rows = [
+      {
+        'Transaction Date': '2025-08-18 12:00:00 AM',
+        'Settlement Date': '2025-08-19 12:00:00 AM',
+        'Action': 'Buy',
+        'Symbol': 'SBET',
+        'Description': 'SHARPLINK',
+        'Quantity': '10',
+        'Price': '20.00',
+        'Gross Amount': '-200.00',
+        'Commission': '0.00',
+        'Net Amount': '-200.00',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual FHSA',
+      },
+    ]
+    const path = writeWorkbook(rows)
+    try {
+      importQuestradeXlsx(path)
+      const second = importQuestradeXlsx(path)
+      expect(second.imported).toBe(1)
+      // Second pass doesn't report SBET as new because it already exists.
+      expect(second.newTickers).toEqual([])
+      expect(listTransactions()).toHaveLength(2)
+    } finally {
+      unlinkSync(path)
+    }
+  })
+})
