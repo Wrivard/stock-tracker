@@ -48,12 +48,20 @@ export function AppHeader() {
     setRefreshing(true)
     try {
       const result = await api().market.refreshAll()
-      const errors = Object.entries(result).filter(([, v]) => v.quoteError).length
-      if (errors > 0) {
+      const failing = Object.entries(result)
+        .filter(([, v]) => v.quoteError)
+        .map(([sym]) => sym)
+      if (failing.length > 0) {
+        // Include the failing tickers in the toast so the user can act
+        // on it instead of just seeing a count.
+        const list =
+          failing.length <= 3
+            ? failing.join(', ')
+            : `${failing.slice(0, 3).join(', ')} +${failing.length - 3}`
         toast.warning(
           locale === 'fr'
-            ? `${errors} erreur(s) sur les quotes`
-            : `${errors} quote error(s)`,
+            ? `Echec quote: ${list}`
+            : `Failed quotes: ${list}`,
         )
       } else {
         toast.success(

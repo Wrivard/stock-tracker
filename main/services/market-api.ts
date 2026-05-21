@@ -28,9 +28,29 @@ const TTL = {
   search: 60 * 60_000,  // 1 h — symbol universe doesn't change often
 }
 
+// Quote routing: Finnhub free tier only covers US exchanges. For Toronto
+// (.TO) and TSX-V (.V), go straight to Twelve Data. For everything else
+// hit Finnhub first; if Finnhub returns `not_found` (their typical
+// response for non-US listings), fall back to Twelve Data once.
+async function fetchQuoteWithFallback(symbol: string): Promise<Quote> {
+  if (twelvedata.routesViaTwelveData(symbol)) {
+    return twelvedata.fetchQuote(symbol)
+  }
+  try {
+    return await finnhub.fetchQuote(symbol)
+  } catch (err) {
+    const isMissing =
+      err instanceof Error &&
+      (err as { code?: string }).code === 'not_found'
+    if (!isMissing) throw err
+    // Finnhub said unknown — try Twelve Data before giving up.
+    return twelvedata.fetchQuote(symbol)
+  }
+}
+
 export async function getQuote(symbol: string, opts?: { bypass?: boolean }) {
   const sym = symbol.toUpperCase()
-  return withCache<Quote>(`quote:${sym}`, () => finnhub.fetchQuote(sym), {
+  return withCache<Quote>(`quote:${sym}`, () => fetchQuoteWithFallback(sym), {
     ttlMs: TTL.quote,
     staleFallback: true,
     bypass: opts?.bypass,

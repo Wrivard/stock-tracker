@@ -1,6 +1,11 @@
 import { twelvedataBucket } from '../throttle'
 import { getApiKey } from '../settings-keys'
-import type { HistoricalCandle, HistoryPeriod, ProviderError } from '../types'
+import type {
+  HistoricalCandle,
+  HistoryPeriod,
+  ProviderError,
+  Quote,
+} from '../types'
 
 const BASE = 'https://api.twelvedata.com'
 
@@ -52,6 +57,72 @@ interface TwelveDataTimeSeries {
   status?: 'ok' | 'error'
   code?: number
   message?: string
+}
+
+interface TwelveDataQuoteResponse {
+  symbol?: string
+  name?: string
+  exchange?: string
+  currency?: string
+  open?: string
+  high?: string
+  low?: string
+  close?: string
+  previous_close?: string
+  change?: string
+  percent_change?: string
+  status?: 'ok' | 'error'
+  code?: number
+  message?: string
+}
+
+// Quote endpoint — used as a fallback / TSX route since Finnhub's free
+// tier doesn't cover Toronto. Twelve Data returns all fields as strings
+// which we coerce to numbers; missing fields default to 0.
+export async function fetchQuote(symbol: string): Promise<Quote> {
+  const key = requireKey()
+  const td = symbolForTwelveData(symbol)
+  await twelvedataBucket.take(1)
+  const url = `${BASE}/quote?symbol=${encodeURIComponent(td)}&apikey=${key}`
+  const res = await fetch(url)
+  if (res.status === 429) throw fail('rate_limit', 'Twelve Data rate limit hit', 429)
+  if (!res.ok) throw fail('unknown', `Twelve Data HTTP ${res.status}`, res.status)
+  const data = (await res.json()) as TwelveDataQuoteResponse
+  if (data.status === 'error') {
+    if (data.code === 429) throw fail('rate_limit', data.message ?? 'rate limited', 429)
+    if (data.code === 404) throw fail('not_found', data.message ?? 'not found', 404)
+    if (data.code === 401)
+      throw fail('unauthorized', data.message ?? 'unauthorized', 401)
+    throw fail('unknown', data.message ?? 'Twelve Data error', data.code)
+  }
+  const num = (v: string | undefined): number => {
+    if (v === undefined || v === null || v === '') return 0
+    const n = Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+  const close = num(data.close)
+  const previousClose = num(data.previous_close)
+  if (close === 0 && previousClose === 0) {
+    throw fail('not_found', `Twelve Data returned empty quote for ${symbol}`, 404)
+  }
+  return {
+    symbol,
+    price: close,
+    previousClose,
+    change: num(data.change),
+    changePercent: num(data.percent_change),
+    dayHigh: num(data.high),
+    dayLow: num(data.low),
+    open: num(data.open),
+    fetchedAt: Date.now(),
+  }
+}
+
+// Surface which exchange suffix a symbol routes to, so the facade
+// can pick the right provider without re-implementing the suffix
+// rules.
+export function routesViaTwelveData(symbol: string): boolean {
+  return symbol.endsWith('.TO') || symbol.endsWith('.V')
 }
 
 export async function fetchDailyHistory(
