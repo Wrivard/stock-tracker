@@ -39,13 +39,19 @@ describe('migrations', () => {
     db.close()
   })
 
-  it('seeds 11 default sectors and INSERT OR IGNORE prevents duplicates', () => {
+  it('seeds 12 default sectors and INSERT OR IGNORE prevents duplicates', () => {
     const db = new Database(':memory:')
     runMigrations(db)
     seedSectors(db)
     seedSectors(db) // second call should be a no-op
     const count = (db.prepare('SELECT COUNT(*) AS n FROM sectors').get() as { n: number }).n
-    expect(count).toBe(11)
+    expect(count).toBe(12)
+    // ETF was added in v0.1.5 alongside the Yahoo provider so auto-detect
+    // can bucket index funds without falling back to "other".
+    const codes = (db
+      .prepare('SELECT code FROM sectors ORDER BY code')
+      .all() as { code: string }[]).map((r) => r.code)
+    expect(codes).toContain('etf')
     db.close()
   })
 

@@ -11,6 +11,11 @@ export interface Quote {
   open: number
   fetchedAt: number
   stale?: boolean
+  // Optional security type when the provider reports it. Used to
+  // auto-bucket ETFs into the dedicated sector instead of "other".
+  quoteType?: 'EQUITY' | 'ETF' | 'INDEX' | 'CRYPTOCURRENCY' | 'OTHER'
+  currency?: Currency
+  exchange?: string
 }
 
 export interface Profile {

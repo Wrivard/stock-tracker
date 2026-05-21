@@ -27,13 +27,17 @@ export function upsertTicker(input: TickerInput): Ticker {
   const symbol = input.symbol.trim().toUpperCase()
   const now = Date.now()
 
+  // currency=null in the staged row means "keep the existing currency on
+  // conflict". We only overwrite it when the caller explicitly passes a
+  // value. INSERT path needs a default (USD) since the column is NOT
+  // NULL — handled by COALESCE in the VALUES too.
   getDb()
     .prepare(
       `INSERT INTO tickers (symbol, name, currency, exchange, sector_id, sector_override, updated_at)
-       VALUES (@symbol, @name, @currency, @exchange, @sectorId, @sectorOverride, @updatedAt)
+       VALUES (@symbol, @name, COALESCE(@currency, 'USD'), @exchange, @sectorId, @sectorOverride, @updatedAt)
        ON CONFLICT(symbol) DO UPDATE SET
          name            = COALESCE(excluded.name, tickers.name),
-         currency        = excluded.currency,
+         currency        = COALESCE(NULLIF(excluded.currency, ''), tickers.currency),
          exchange        = COALESCE(excluded.exchange, tickers.exchange),
          sector_id       = CASE
                              WHEN excluded.sector_override = 1 THEN excluded.sector_id
@@ -48,7 +52,7 @@ export function upsertTicker(input: TickerInput): Ticker {
     .run({
       symbol,
       name: input.name ?? null,
-      currency: input.currency ?? 'USD',
+      currency: input.currency ?? null,
       exchange: input.exchange ?? null,
       sectorId: input.sectorId ?? null,
       sectorOverride: input.sectorOverride ? 1 : 0,

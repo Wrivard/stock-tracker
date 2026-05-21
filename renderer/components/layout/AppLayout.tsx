@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import {
   LayoutDashboard,
@@ -48,12 +48,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const openQuickTrade = useUi((s) => s.openQuickTrade)
   const closeQuickTrade = useUi((s) => s.closeQuickTrade)
   const bumpData = useUi((s) => s.bumpData)
+  const [appVersion, setAppVersion] = useState<string | null>(null)
 
   useEffect(() => {
     if (initialized) return
     if (typeof window === 'undefined' || !window.api) return
     void loadFromBackend()
   }, [initialized, loadFromBackend])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.api) return
+    window.api.updater
+      .currentVersion()
+      .then(setAppVersion)
+      .catch(() => undefined)
+  }, [])
 
   useAutoRefresh()
 
@@ -151,7 +160,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="px-4 py-3 text-[11px] text-sidebar-foreground/40 border-t border-sidebar-border tabular-nums">
-          v0.1.0 · local-only
+          {appVersion ? `v${appVersion}` : 'v…'} · local-only
         </div>
       </aside>
       <div className="flex-1 flex flex-col overflow-hidden">

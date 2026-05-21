@@ -11,6 +11,11 @@ const DEFAULT_SECTORS = [
   { code: 'utilities', labelFr: 'Services publics', labelEn: 'Utilities', color: '#14b8a6' },
   { code: 'telecom', labelFr: 'Telecommunications', labelEn: 'Communication', color: '#ec4899' },
   { code: 'real_estate', labelFr: 'Immobilier', labelEn: 'Real Estate', color: '#f97316' },
+  // ETF: not really a "sector" in the GICS sense, but ETFs hold multiple
+  // sectors at once so bucketing them as their own group keeps the pie
+  // chart honest. Auto-assigned when the quote provider reports
+  // instrumentType=ETF.
+  { code: 'etf', labelFr: 'FNB / ETF', labelEn: 'ETF', color: '#06b6d4' },
   { code: 'other', labelFr: 'Autre', labelEn: 'Other', color: '#737373' },
 ]
 

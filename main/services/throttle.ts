@@ -66,3 +66,8 @@ export const twelvedataBucket = new TokenBucket(8, 8 / 60)
 
 // Frankfurter has no documented hard limit. Be polite.
 export const frankfurterBucket = new TokenBucket(10, 5)
+
+// Yahoo Finance has no official public rate limit; clients that hammer
+// the endpoint get cookie-walled or temporarily blocked. Keep traffic
+// to a slow background trickle.
+export const yahooBucket = new TokenBucket(10, 2)

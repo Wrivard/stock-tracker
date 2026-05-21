@@ -2,6 +2,7 @@ import { invalidate, readRaw, withCache } from './cache'
 import * as finnhub from './providers/finnhub'
 import * as twelvedata from './providers/twelvedata'
 import * as frankfurter from './providers/frankfurter'
+import * as yahoo from './providers/yahoo'
 import { industryToSectorCode } from './industry-sector'
 import { listTickers as _listTickers, upsertTicker } from '../db/repo/tickers'
 import type { Ticker } from '../db/types'
@@ -28,24 +29,36 @@ const TTL = {
   search: 60 * 60_000,  // 1 h — symbol universe doesn't change often
 }
 
-// Quote routing: Finnhub free tier only covers US exchanges. For Toronto
-// (.TO) and TSX-V (.V), go straight to Twelve Data. For everything else
-// hit Finnhub first; if Finnhub returns `not_found` (their typical
-// response for non-US listings), fall back to Twelve Data once.
+// Quote routing strategy:
+// 1) Yahoo Finance (public chart API): free, no key, covers US + TSX +
+//    most global exchanges, and helpfully reports instrumentType so we
+//    can auto-bucket ETFs. The default first try.
+// 2) Finnhub: only useful for the user's configured key and US listings,
+//    but we keep it as a fallback in case Yahoo's unofficial endpoint
+//    rate-limits us or changes shape.
+// 3) Twelve Data: paid tier covers everything but the free plan blocks
+//    TSX, so it's a third-string fallback.
 async function fetchQuoteWithFallback(symbol: string): Promise<Quote> {
-  if (twelvedata.routesViaTwelveData(symbol)) {
-    return twelvedata.fetchQuote(symbol)
+  const errors: string[] = []
+  try {
+    return await yahoo.fetchQuote(symbol)
+  } catch (err) {
+    errors.push(`yahoo: ${err instanceof Error ? err.message : String(err)}`)
   }
   try {
     return await finnhub.fetchQuote(symbol)
   } catch (err) {
-    const isMissing =
-      err instanceof Error &&
-      (err as { code?: string }).code === 'not_found'
-    if (!isMissing) throw err
-    // Finnhub said unknown — try Twelve Data before giving up.
-    return twelvedata.fetchQuote(symbol)
+    errors.push(`finnhub: ${err instanceof Error ? err.message : String(err)}`)
   }
+  try {
+    return await twelvedata.fetchQuote(symbol)
+  } catch (err) {
+    errors.push(`twelvedata: ${err instanceof Error ? err.message : String(err)}`)
+  }
+  const combined = new Error(`Quote unavailable for ${symbol}: ${errors.join(' | ')}`)
+  ;(combined as { code?: string }).code = 'not_found'
+  ;(combined as { provider?: string }).provider = 'all'
+  throw combined
 }
 
 export async function getQuote(symbol: string, opts?: { bypass?: boolean }) {
@@ -114,9 +127,16 @@ export async function getFxRate(from: Currency, to: Currency) {
 
 // Fetch quote + profile in one shot. Profile drives auto-sector assignment
 // and updates the ticker's name / native currency if not overridden.
+//
+// We also use the Yahoo-reported `quoteType` ("ETF", "EQUITY", …) as a
+// shortcut: when Finnhub's profile endpoint refuses to return industry
+// data for a non-US listing, a quote that says "ETF" is still enough
+// for us to bucket the position correctly.
 export async function refreshTicker(symbol: string, opts?: { bypass?: boolean }) {
   const sym = symbol.toUpperCase()
-  const quote = await getQuote(sym, opts).catch((err) => ({ error: err as Error }))
+  const quoteResult = await getQuote(sym, opts).catch((err) => ({
+    error: err as Error,
+  }))
   let profile: Profile | null = null
   let profileError: Error | null = null
   try {
@@ -126,25 +146,42 @@ export async function refreshTicker(symbol: string, opts?: { bypass?: boolean })
     profileError = err as Error
   }
 
-  // Auto-update the ticker name + auto-assign sector when profile is available
-  // and the user hasn't overridden the sector manually.
-  if (profile) {
-    const sectorCode = industryToSectorCode(profile.industry)
-    const sector = getSectorByCode(sectorCode)
+  const quoteData = 'error' in quoteResult ? null : quoteResult.data
+
+  // Decide which sector to apply. Priority: explicit industry from a
+  // Finnhub profile, then the Yahoo instrumentType (catches ETFs that
+  // Finnhub doesn't list), then leave the existing sector alone.
+  let sectorCode: string | null = null
+  if (profile?.industry) {
+    sectorCode = industryToSectorCode(profile.industry)
+  } else if (quoteData?.quoteType === 'ETF') {
+    sectorCode = 'etf'
+  } else if (quoteData?.quoteType && quoteData.quoteType !== 'OTHER') {
+    sectorCode = 'other'
+  }
+
+  const sectorId = sectorCode ? getSectorByCode(sectorCode)?.id ?? null : null
+
+  // Pick the best metadata we can: profile wins, then quote.
+  const inferredCurrency = profile?.currency ?? quoteData?.currency
+  const inferredExchange = profile?.exchange ?? quoteData?.exchange ?? undefined
+  const inferredName = profile?.name ?? undefined
+
+  if (profile || quoteData) {
     upsertTicker({
       symbol: sym,
-      name: profile.name ?? undefined,
-      currency: profile.currency,
-      exchange: profile.exchange ?? undefined,
-      sectorId: sector?.id ?? null,
-      // sectorOverride defaults to false here; upsert only writes the
+      name: inferredName,
+      currency: inferredCurrency,
+      exchange: inferredExchange,
+      sectorId: sectorCode ? sectorId : undefined,
+      // sectorOverride defaults to false; upsert only writes the
       // sector when the existing override flag is 0.
     })
   }
 
   return {
-    quote: 'error' in quote ? null : quote,
-    quoteError: 'error' in quote ? quote.error.message : null,
+    quote: 'error' in quoteResult ? null : quoteResult,
+    quoteError: 'error' in quoteResult ? quoteResult.error.message : null,
     profile,
     profileError: profileError?.message ?? null,
   }
