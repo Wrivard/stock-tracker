@@ -8,6 +8,7 @@ import type { NewsRecapResult } from '../../main/services/ai/recap'
 import { api } from '@/lib/api'
 import { useUi } from '@/lib/store'
 import { useT } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import {
   Card,
   CardDescription,
@@ -113,11 +114,16 @@ export default function NewsPage() {
       toast.error(t('news.recapNoKey'))
       return
     }
+    // Reset the previous result IMMEDIATELY so the dialog opens in a
+    // loading state instead of flashing the stale recap from the last
+    // click. Setting recap=null is what the dialog reads to switch into
+    // its loading skeleton (see below).
+    setRecap(null)
+    setRecapOpen(true)
     setRecapBusy(true)
     try {
       const result = await api().ai.newsRecap(locale, 7)
       setRecap(result)
-      setRecapOpen(true)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
@@ -164,7 +170,30 @@ export default function NewsPage() {
                 : 'Recent articles (Yahoo + Finnhub) for your portfolio tickers.'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Dedicated Actualiser for the news list. The header's
+                global Refresh hits all providers (quotes, profiles,
+                news, history, fx) which is overkill when the user
+                just wants fresh headlines. This button only re-pulls
+                news via reload(). */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void reload()}
+              disabled={loading}
+              title={
+                locale === 'fr'
+                  ? 'Recharger les actualites'
+                  : 'Reload the news'
+              }
+            >
+              <RefreshCw
+                className={cn('size-3.5', loading && 'animate-spin')}
+              />
+              {loading
+                ? t('common.refreshing')
+                : t('common.refresh')}
+            </Button>
             {filter === ALL && (
               <Button
                 size="sm"
@@ -298,7 +327,12 @@ export default function NewsPage() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="size-4 text-primary" />
+              <Sparkles
+                className={cn(
+                  'size-4 text-primary',
+                  recapBusy && 'animate-pulse',
+                )}
+              />
               {t('news.recapTitle')}
             </DialogTitle>
             {recap && recap.articleCount > 0 && (
@@ -311,6 +345,28 @@ export default function NewsPage() {
               </DialogDescription>
             )}
           </DialogHeader>
+          {/* Loading state — recap=null + recapBusy=true means the user
+              clicked the button and we cleared the previous result.
+              Show skeletons that hint at the per-ticker section layout
+              the response will populate. */}
+          {recap === null && recapBusy && (
+            <div className="space-y-3">
+              <Skeleton className="h-3 w-32" />
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-5/6" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/6" />
+              </div>
+              <p className="text-xs text-muted-foreground text-center pt-2">
+                {t('news.recapBusy')}
+              </p>
+            </div>
+          )}
           {recap && recap.articleCount === 0 && (
             // Empty state. recap.ts already short-circuits without an
             // OpenAI call when there's nothing to summarize, so we never
