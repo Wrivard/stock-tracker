@@ -306,12 +306,17 @@ export default function SettingsPage() {
             <ExternalLink className="size-3" />
           </Button>
         </div>
-        <div className="flex gap-2">
+        {/* min-w-0 on the input wrapper so it can shrink past the Save
+            button's min-content width when the viewport is narrow. Without
+            it the Save button text ("Enregistrer" / "Remplacer") forces
+            the input to overflow the row. */}
+        <div className="flex gap-2 flex-wrap">
           <Input
             id={inputId}
             type={show ? 'text' : 'password'}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            className="min-w-0 flex-1 basis-40"
             placeholder={
               configured
                 ? locale === 'fr'
@@ -717,9 +722,12 @@ export default function SettingsPage() {
                     key={b.fileName}
                     className="flex items-center justify-between py-2"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="font-mono tabular-nums">{b.date}</span>
-                      <span className="text-muted-foreground text-xs truncate">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className="font-mono tabular-nums shrink-0">{b.date}</span>
+                      <span
+                        className="text-muted-foreground text-xs truncate min-w-0"
+                        title={b.fileName}
+                      >
                         {b.fileName}
                       </span>
                     </div>

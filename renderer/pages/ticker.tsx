@@ -283,9 +283,12 @@ export default function TickerPage() {
             </div>
           </div>
 
-          <div className="flex items-start gap-2">
-            <div className="text-right">
-              <div className="text-3xl font-semibold tabular-nums">
+          <div className="flex items-start gap-2 min-w-0">
+            <div className="text-right min-w-0">
+              {/* text-2xl on narrow widths, text-3xl on md+, with
+                  tabular-nums + truncate so an oversized money string
+                  doesn't push the Trade button off the row. */}
+              <div className="text-2xl md:text-3xl font-semibold tabular-nums truncate">
                 {position?.currentPrice !== null && position?.currentPrice !== undefined
                   ? formatMoney(position.currentPrice, currency, lc)
                   : profile?.data
@@ -605,27 +608,33 @@ interface MiniKpiProps {
 
 function MiniKpi({ label, value, sub, tone }: MiniKpiProps) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3.5">
+    <div className="rounded-lg border border-border bg-card p-3.5 min-w-0">
       <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
         {label}
       </div>
       <div
         className={cn(
-          'text-xl font-semibold tabular-nums mt-1',
+          // truncate prevents large dollar amounts like
+          // "$1,234,567.89" from overflowing the card at narrow
+          // viewports (4-col grid drops each card to ~190px on a
+          // 1024px window minus sidebar).
+          'text-xl font-semibold tabular-nums mt-1 truncate',
           tone === 'positive' && 'text-positive',
           tone === 'negative' && 'text-negative',
         )}
+        title={value}
       >
         {value}
       </div>
       {sub && (
         <div
           className={cn(
-            'text-[11px] mt-0.5 tabular-nums',
+            'text-[11px] mt-0.5 tabular-nums truncate',
             tone === 'positive' && 'text-positive/80',
             tone === 'negative' && 'text-negative/80',
             !tone && 'text-muted-foreground',
           )}
+          title={sub}
         >
           {sub}
         </div>

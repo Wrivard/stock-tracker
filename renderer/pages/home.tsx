@@ -128,7 +128,7 @@ export default function HomePage() {
         </header>
 
         {loading && !overview && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-28 rounded-lg" />
             ))}
@@ -189,7 +189,7 @@ export default function HomePage() {
             {!isEmpty && (
               <>
                 {/* KPIs */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                   <KpiCard
                     title={t('dashboard.totalValue')}
                     value={formatMoney(overview.totalValue, overview.displayCurrency, lc)}
@@ -602,7 +602,7 @@ function NewsWidget({ news, locale, onOpen }: NewsWidgetProps) {
                   onClick={() => onOpen(n.url)}
                   className="w-full text-left group py-1.5 rounded hover:bg-muted/50 px-1.5 -mx-1.5 transition-colors"
                 >
-                  <div className="text-xs font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                  <div className="text-xs font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2 break-words">
                     {n.headline}
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">

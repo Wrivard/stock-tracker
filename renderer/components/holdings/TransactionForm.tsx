@@ -295,7 +295,7 @@ export function TransactionForm({
             </div>
 
             {error && (
-              <div className="text-sm text-destructive">{error}</div>
+              <div className="text-sm text-destructive break-words">{error}</div>
             )}
           </div>
 

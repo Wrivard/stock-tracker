@@ -12,15 +12,28 @@ interface KpiCardProps {
 }
 
 export function KpiCard({ title, value, hint, delta, icon, trail }: KpiCardProps) {
+  // tooltip = the raw stringified value when it's a primitive, so a
+  // truncated long money string is recoverable on hover. Skip for
+  // complex ReactNode values where stringification is meaningless.
+  const valueTitle =
+    typeof value === 'string' || typeof value === 'number'
+      ? String(value)
+      : undefined
   return (
     <div className="relative rounded-lg border border-border bg-card p-4 overflow-hidden">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
           {title}
         </span>
-        {icon && <span className="text-muted-foreground">{icon}</span>}
+        {icon && <span className="text-muted-foreground shrink-0">{icon}</span>}
       </div>
-      <div className="text-[26px] font-semibold tabular-nums tracking-tight mt-1.5 leading-none">
+      {/* text-2xl (24px) on a Tailwind scale instead of arbitrary 26px;
+          truncate prevents long money strings from blowing the card
+          width on narrow 4-col grids. */}
+      <div
+        className="text-2xl font-semibold tabular-nums tracking-tight mt-1.5 leading-none truncate"
+        title={valueTitle}
+      >
         {value}
       </div>
       {delta && (

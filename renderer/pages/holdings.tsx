@@ -171,7 +171,10 @@ export default function HoldingsPage() {
                         {p.ticker}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[180px] truncate">
+                    <TableCell
+                      className="text-muted-foreground max-w-[180px] truncate"
+                      title={p.name ?? undefined}
+                    >
                       {p.name ?? '—'}
                     </TableCell>
                     <TableCell>
@@ -183,7 +186,7 @@ export default function HoldingsPage() {
                             sectorId: p.sectorId,
                           })
                         }
-                        className="flex items-center gap-1"
+                        className="flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       >
                         {p.sectorCode ? (
                           <Badge variant="secondary">
@@ -238,12 +241,14 @@ export default function HoldingsPage() {
                              currency (already converted in portfolio.ts).
                              Sub line: % move, smaller. Mirrors the
                              two-line treatment we use on the Gain/perte
-                             column for visual consistency. */}
+                             column for visual consistency. text-xs (not
+                             10px) avoids stacking opacity on the already-
+                             mid-saturation positive/negative tone. */}
                           <div>
                             {p.dayPnl >= 0 ? '+' : ''}
                             {formatMoney(p.dayPnl, overview.displayCurrency, lc)}
                           </div>
-                          <div className="text-[10px] opacity-70">
+                          <div className="text-xs">
                             {p.changePercent >= 0 ? '+' : ''}
                             {formatPercent(p.changePercent / 100, lc)}
                           </div>
@@ -264,7 +269,7 @@ export default function HoldingsPage() {
                     >
                       {p.pnl >= 0 ? '+' : ''}
                       {formatMoney(p.pnl, overview.displayCurrency, lc)}
-                      <div className="text-[10px] opacity-70">
+                      <div className="text-xs">
                         {p.pnlPct >= 0 ? '+' : ''}
                         {formatPercent(p.pnlPct / 100, lc)}
                       </div>

@@ -93,15 +93,18 @@ export function PortfolioPerformanceChart({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div>
+          <div className="min-w-0">
             <CardTitle className="text-base">
               {locale === 'fr'
                 ? 'Performance du portefeuille'
                 : 'Portfolio performance'}
             </CardTitle>
             {data && data.points.length > 0 && (
-              <div className="flex items-baseline gap-3 mt-1">
-                <span className="text-2xl font-semibold tabular-nums">
+              <div className="flex items-baseline gap-3 mt-1 flex-wrap">
+                <span
+                  className="text-2xl font-semibold tabular-nums truncate"
+                  title={formatMoney(data.endValue, data.displayCurrency, lc)}
+                >
                   {formatMoney(data.endValue, data.displayCurrency, lc)}
                 </span>
                 <span

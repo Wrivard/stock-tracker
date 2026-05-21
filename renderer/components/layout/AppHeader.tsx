@@ -78,7 +78,11 @@ export function AppHeader() {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <header className="h-12 border-b border-border bg-background flex items-center justify-end gap-2 px-4">
+      {/* flex-wrap so the header gracefully degrades on narrow Electron
+          windows. h-auto + min-h replaces the fixed h-12 because wrapped
+          rows need vertical room; the min-h keeps the unwrapped (common)
+          case visually unchanged. */}
+      <header className="min-h-12 border-b border-border bg-background flex flex-wrap items-center justify-end gap-2 px-4 py-1.5">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -104,7 +108,7 @@ export function AppHeader() {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="text-[11px] text-muted-foreground tabular-nums px-2">
+            <span className="text-[11px] text-muted-foreground tabular-nums px-2 truncate max-w-[120px]">
               {formatRelativeTime(lastRefreshAt, locale)}
             </span>
           </TooltipTrigger>

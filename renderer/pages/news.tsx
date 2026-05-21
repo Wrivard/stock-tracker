@@ -194,7 +194,7 @@ export default function NewsPage() {
         </header>
 
         {Object.entries(errors).length > 0 && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground break-words max-h-32 overflow-y-auto">
             <span className="font-medium text-amber-500">
               {locale === 'fr' ? 'Avertissements : ' : 'Warnings: '}
             </span>
@@ -267,7 +267,7 @@ export default function NewsPage() {
                     <span>·</span>
                     <span>{new Date(n.publishedAt).toLocaleString(lc)}</span>
                   </div>
-                  <h3 className="font-medium leading-snug group-hover:text-primary transition-colors">
+                  <h3 className="font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2 break-words">
                     {n.headline}
                   </h3>
                   {n.summary && (

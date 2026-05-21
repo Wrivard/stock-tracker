@@ -135,7 +135,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   }, [])
 
   return (
-    <div className="fixed inset-0 bg-background text-foreground flex items-center justify-center p-6 overflow-auto">
+    <div className="fixed inset-0 bg-background text-foreground flex items-center justify-center p-6 overflow-y-auto overflow-x-hidden">
       <div className="max-w-xl w-full">
         {/* Header with logo + progress dots */}
         <header className="flex items-center justify-between mb-8">
@@ -439,6 +439,7 @@ function KeyInput({ label, value, onChange, show, onToggle }: KeyInputProps) {
           placeholder="…"
           autoComplete="off"
           spellCheck={false}
+          className="min-w-0 flex-1"
         />
         <Button
           type="button"
