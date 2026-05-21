@@ -221,13 +221,32 @@ export async function fetchDailyHistory(
 // for only news (quotesCount: 0) and map onto our NewsItem shape.
 // Summary is left blank because Yahoo's search response doesn't carry
 // article bodies — only the headline + link is reliable.
+//
+// IMPORTANT: Yahoo's news search returns *generic market headlines* for
+// ETFs and broad-index symbols (e.g. XEQT.TO, VFV.TO) because there's
+// rarely news authored "about" an ETF itself. The unfiltered response
+// then contains random Microsoft/AMD/Reuters items that have nothing to
+// do with the ticker we asked for. We dedupe that noise by keeping only
+// articles whose `relatedTickers` field actually contains the symbol
+// (matched against both the exact form "XEQT.TO" and the bare root
+// "XEQT", since Yahoo's relatedTickers can use either depending on the
+// publisher). For ETFs this typically produces an empty list, which is
+// the honest answer — better than showing fake news.
 export async function fetchNews(symbol: string, count = 10): Promise<NewsItem[]> {
   await yahooBucket.take(1)
   try {
     const r = await yf.search(symbol, { newsCount: count, quotesCount: 0 })
     const items = r.news ?? []
+    const upper = symbol.toUpperCase()
+    // "XEQT.TO" → "XEQT", "BRK-B" → "BRK-B" (no dotted suffix). We accept
+    // either form in relatedTickers.
+    const root = upper.includes('.') ? upper.split('.')[0] : upper
     return items
       .filter((n) => n.title && n.link)
+      .filter((n) => {
+        const related = (n.relatedTickers ?? []).map((t) => t.toUpperCase())
+        return related.includes(upper) || related.includes(root)
+      })
       .map((n) => ({
         id: `${symbol}:yahoo:${n.uuid ?? n.link}`,
         symbol,
