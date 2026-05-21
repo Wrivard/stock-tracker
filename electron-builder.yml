@@ -11,9 +11,23 @@ files:
       - app
 asarUnpack:
   - "**/node_modules/better-sqlite3/**"
-publish: null
+
+# Auto-updater channel: latest releases live on GitHub. `npm run release`
+# bumps version, builds, and uploads the artifacts (needs GH_TOKEN with
+# `repo` scope, or an authenticated `gh` CLI).
+publish:
+  - provider: github
+    owner: Wrivard
+    repo: stock-tracker
+    releaseType: release
 
 win:
+  # We ship NSIS only. A portable target was tried and dropped because the
+  # portable launcher extracts to %LOCALAPPDATA%\Temp, which on this user's
+  # machine carries the Anthropic Codex Sandbox ACL (AppContainer SID with
+  # FullControl) that crashes Chromium's renderer process at startup.
+  # NSIS with a custom installer.nsh redirects $INSTDIR to %USERPROFILE%
+  # which is outside the sandboxed tree — auto-update keeps working there.
   target:
     - target: nsis
       arch:
@@ -22,6 +36,7 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  include: build/installer.nsh
   artifactName: "${productName}-${version}-setup.${ext}"
 
 mac:

@@ -4,11 +4,13 @@ import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import {
   Download,
+  DownloadCloud,
   Eye,
   EyeOff,
   ExternalLink,
   FolderOpen,
   HardDriveDownload,
+  RotateCcw,
   Save,
 } from 'lucide-react'
 
@@ -56,6 +58,16 @@ export default function SettingsPage() {
   const [savingTwelvedata, setSavingTwelvedata] = useState(false)
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [backupBusy, setBackupBusy] = useState(false)
+  const [appVersion, setAppVersion] = useState<string>('')
+  const [updateBusy, setUpdateBusy] = useState(false)
+  const [updateState, setUpdateState] = useState<
+    | { status: 'idle' }
+    | { status: 'up-to-date' }
+    | { status: 'available'; version: string }
+    | { status: 'downloaded'; version: string }
+    | { status: 'error'; message: string }
+    | { status: 'dev'; message: string }
+  >({ status: 'idle' })
 
   useEffect(() => {
     if (!initialized) return
@@ -63,14 +75,50 @@ export default function SettingsPage() {
       api().settings.get('api.finnhubKey'),
       api().settings.get('api.twelvedataKey'),
       api().backup.list(),
+      api().updater.currentVersion(),
     ])
-      .then(([f, t2, bs]) => {
+      .then(([f, t2, bs, v]) => {
         if (f) setFinnhubKey(f)
         if (t2) setTwelvedataKey(t2)
         setBackups(bs)
+        setAppVersion(v)
       })
       .catch((err: Error) => toast.error(err.message))
   }, [initialized])
+
+  async function handleCheckUpdate() {
+    setUpdateBusy(true)
+    try {
+      const result = await api().updater.check()
+      if (result.status === 'up-to-date') {
+        setUpdateState({ status: 'up-to-date' })
+        toast.success(t('settings.upToDate'))
+      } else if (result.status === 'available') {
+        setUpdateState({ status: 'available', version: result.version })
+        toast.info(
+          t('settings.updateAvailable', { version: result.version }),
+        )
+      } else if (result.status === 'dev') {
+        setUpdateState({ status: 'dev', message: result.message })
+        toast.info(result.message)
+      } else {
+        setUpdateState({ status: 'error', message: result.message })
+        toast.error(result.message)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setUpdateBusy(false)
+    }
+  }
+
+  async function handleRestartToInstall() {
+    try {
+      await api().updater.quitAndInstall()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   async function refreshBackups() {
     try {
@@ -375,6 +423,61 @@ export default function SettingsPage() {
               </p>
             </div>
           </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle>{t('settings.updates')}</CardTitle>
+                <CardDescription>{t('settings.updatesHelp')}</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                {appVersion && (
+                  <Badge variant="secondary" className="font-mono">
+                    v{appVersion}
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCheckUpdate}
+                  disabled={updateBusy}
+                >
+                  <DownloadCloud />
+                  {updateBusy ? t('settings.checking') : t('settings.checkUpdates')}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          {updateState.status !== 'idle' && (
+            <CardContent>
+              {updateState.status === 'up-to-date' && (
+                <p className="text-sm text-positive">
+                  {t('settings.upToDate')}
+                </p>
+              )}
+              {updateState.status === 'available' && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm">
+                    {t('settings.updateAvailable', { version: updateState.version })}
+                  </p>
+                  <Button size="sm" onClick={handleRestartToInstall}>
+                    <RotateCcw />
+                    {t('settings.restartToInstall')}
+                  </Button>
+                </div>
+              )}
+              {updateState.status === 'dev' && (
+                <p className="text-xs text-muted-foreground">
+                  {updateState.message}
+                </p>
+              )}
+              {updateState.status === 'error' && (
+                <p className="text-sm text-destructive">{updateState.message}</p>
+              )}
+            </CardContent>
+          )}
         </Card>
 
         <Card>

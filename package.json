@@ -8,11 +8,12 @@
   "main": "app/main.js",
   "scripts": {
     "dev": "nextron",
-    "build": "nextron build",
+    "build": "nextron build --publish never",
     "test": "vitest run",
     "test:watch": "vitest",
     "pretest": "npm rebuild better-sqlite3",
     "posttest": "electron-builder install-app-deps",
+    "release": "nextron build --publish always",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "dotenv": "^17.4.2",
     "electron-serve": "^3.0.0",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^1.16.0",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",

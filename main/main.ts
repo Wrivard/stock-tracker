@@ -3,6 +3,7 @@ import './services/env'
 import path from 'path'
 import { app, dialog, type BrowserWindow } from 'electron'
 import serve from 'electron-serve'
+import electronUpdaterPkg from 'electron-updater'
 import { createWindow } from './helpers/create-window'
 import { closeDb, initDb } from './db/connection'
 import { registerIpcHandlers } from './ipc/handlers'
@@ -10,6 +11,8 @@ import { runDailyBackup } from './services/backup'
 import { cleanupExpiredCache } from './services/cache'
 import { maybeCaptureDailySnapshot } from './services/snapshots'
 import { initStartupLog, log } from './util/logger'
+
+const { autoUpdater } = electronUpdaterPkg
 
 const isProd = process.env.NODE_ENV === 'production'
 
@@ -171,6 +174,37 @@ function bindLocalShortcuts(win: BrowserWindow) {
     void maybeCaptureDailySnapshot().catch((err) =>
       log('snapshot capture failed', err instanceof Error ? err : { err: String(err) }),
     )
+
+    // Auto-update check (production only). electron-updater compares the
+    // current app.getVersion() with the latest GitHub release on
+    // Wrivard/stock-tracker and downloads/installs in-place for NSIS or
+    // surfaces an OS notification for other targets. Failures are logged
+    // and silent — never block the UI on update issues.
+    if (isProd) {
+      autoUpdater.logger = {
+        info: (m: unknown) => log('updater:info', typeof m === 'string' ? m : { m }),
+        warn: (m: unknown) => log('updater:warn', typeof m === 'string' ? m : { m }),
+        error: (m: unknown) => log('updater:error', typeof m === 'string' ? m : { m }),
+        debug: () => undefined,
+      } as never
+      autoUpdater.autoDownload = true
+      autoUpdater.autoInstallOnAppQuit = true
+      autoUpdater.on('update-available', (info) =>
+        log('updater:update-available', { version: info.version }),
+      )
+      autoUpdater.on('update-not-available', (info) =>
+        log('updater:up-to-date', { version: info.version }),
+      )
+      autoUpdater.on('update-downloaded', (info) =>
+        log('updater:downloaded', { version: info.version }),
+      )
+      autoUpdater.on('error', (err) =>
+        log('updater:error-event', err instanceof Error ? err : { err: String(err) }),
+      )
+      void autoUpdater.checkForUpdatesAndNotify().catch((err) =>
+        log('updater check failed', err instanceof Error ? err : { err: String(err) }),
+      )
+    }
   } catch (err) {
     log('FATAL during startup', err instanceof Error ? err : { err: String(err) })
     if (isProd) {

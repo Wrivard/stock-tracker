@@ -80,6 +80,23 @@ const dict: Dict = {
   'tx.titleFor': { fr: 'Transactions — {ticker}', en: 'Transactions — {ticker}' },
 
   'settings.title': { fr: 'Parametres', en: 'Settings' },
+  'settings.updates': { fr: 'Mises a jour', en: 'Updates' },
+  'settings.updatesHelp': {
+    fr: 'Verifie GitHub pour une version plus recente et installe automatiquement (installation NSIS uniquement).',
+    en: 'Checks GitHub for a newer release and installs in-place (NSIS install only).',
+  },
+  'settings.currentVersion': { fr: 'Version installee', en: 'Installed version' },
+  'settings.checkUpdates': { fr: 'Verifier les mises a jour', en: 'Check for updates' },
+  'settings.checking': { fr: 'Verification…', en: 'Checking…' },
+  'settings.upToDate': { fr: 'Tu es a jour.', en: "You're up to date." },
+  'settings.updateAvailable': {
+    fr: 'Version {version} disponible',
+    en: 'Version {version} available',
+  },
+  'settings.restartToInstall': {
+    fr: 'Redemarrer pour installer',
+    en: 'Restart to install',
+  },
   'settings.backups': { fr: 'Sauvegardes', en: 'Backups' },
   'settings.backupsHelp': {
     fr: 'Sauvegardes quotidiennes automatiques. 7 plus recentes conservees.',

@@ -54,4 +54,9 @@ export const IPC = {
     exportTo: 'backup:exportTo',
     openFolder: 'backup:openFolder',
   },
+  updater: {
+    check: 'updater:check',
+    currentVersion: 'updater:currentVersion',
+    quitAndInstall: 'updater:quitAndInstall',
+  },
 } as const

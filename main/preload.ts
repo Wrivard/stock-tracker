@@ -152,6 +152,19 @@ const api = {
       ipcRenderer.invoke(IPC.backup.exportTo) as Promise<string | null>,
     openFolder: () => ipcRenderer.invoke(IPC.backup.openFolder) as Promise<string>,
   },
+  updater: {
+    currentVersion: () =>
+      ipcRenderer.invoke(IPC.updater.currentVersion) as Promise<string>,
+    check: () =>
+      ipcRenderer.invoke(IPC.updater.check) as Promise<
+        | { status: 'dev'; message: string }
+        | { status: 'up-to-date' }
+        | { status: 'available'; version: string; releaseDate: string }
+        | { status: 'error'; message: string }
+      >,
+    quitAndInstall: () =>
+      ipcRenderer.invoke(IPC.updater.quitAndInstall) as Promise<void>,
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

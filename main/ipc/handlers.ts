@@ -1,11 +1,15 @@
 import {
   BrowserWindow,
+  app,
   dialog,
   ipcMain,
   shell,
   type IpcMainInvokeEvent,
 } from 'electron'
+import electronUpdaterPkg from 'electron-updater'
 import { z } from 'zod'
+
+const { autoUpdater } = electronUpdaterPkg
 
 import { IPC } from './channels'
 import * as holdingsRepo from '../db/repo/holdings'
@@ -206,6 +210,46 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.backup.list, wrap(() => backup.listBackups()))
   ipcMain.handle(IPC.backup.runNow, wrap(() => backup.runDailyBackup()))
   ipcMain.handle(IPC.backup.openFolder, wrap(() => shell.openPath(backup.getBackupDir())))
+
+  ipcMain.handle(IPC.updater.currentVersion, wrap(() => app.getVersion()))
+  ipcMain.handle(
+    IPC.updater.check,
+    wrap(async () => {
+      const isProd = process.env.NODE_ENV === 'production'
+      if (!isProd) {
+        return {
+          status: 'dev' as const,
+          message: 'Auto-update is disabled in development.',
+        }
+      }
+      try {
+        const result = await autoUpdater.checkForUpdatesAndNotify()
+        if (!result?.updateInfo) {
+          return { status: 'up-to-date' as const }
+        }
+        return {
+          status: 'available' as const,
+          version: result.updateInfo.version,
+          releaseDate: result.updateInfo.releaseDate,
+        }
+      } catch (err) {
+        return {
+          status: 'error' as const,
+          message: err instanceof Error ? err.message : String(err),
+        }
+      }
+    }),
+  )
+  ipcMain.handle(
+    IPC.updater.quitAndInstall,
+    wrap(() => {
+      try {
+        autoUpdater.quitAndInstall()
+      } catch (err) {
+        console.error('[ipc] quitAndInstall', err)
+      }
+    }),
+  )
 
   // Save dialog needs the sender's window to be modal — fall back to no
   // window if we can't resolve one (still works, just not modal).
