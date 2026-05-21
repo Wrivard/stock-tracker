@@ -61,6 +61,12 @@ export default function NewsPage() {
   const [recap, setRecap] = useState<NewsRecapResult | null>(null)
   const [recapOpen, setRecapOpen] = useState(false)
   const [refreshingFromRecap, setRefreshingFromRecap] = useState(false)
+  // Symbols of CURRENTLY-owned positions, used to populate the filter
+  // dropdown. Fetched independently from `items` so the dropdown still
+  // surfaces ETFs and other holdings that have zero news (the previous
+  // implementation built the list from items.symbol, which silently
+  // dropped any ticker without news — i.e. every ETF after v0.1.13).
+  const [ownedTickers, setOwnedTickers] = useState<string[]>([])
 
   const reload = async () => {
     setLoading(true)
@@ -69,9 +75,13 @@ export default function NewsPage() {
       // when the news cache is empty (typical on first launch). withCache
       // still honors its 30 min TTL so this doesn't spam — repeat loads
       // within the window serve from SQLite.
-      const data = await api().market.portfolioNews({ cachedOnly: false })
+      const [data, holdings] = await Promise.all([
+        api().market.portfolioNews({ cachedOnly: false }),
+        api().holdings.list(),
+      ])
       setItems(data.items)
       setErrors(data.errors)
+      setOwnedTickers(holdings.map((h) => h.ticker).sort())
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
@@ -84,12 +94,6 @@ export default function NewsPage() {
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialized, refreshTick, dataTick])
-
-  const tickers = useMemo(() => {
-    const set = new Set<string>()
-    for (const item of items) set.add(item.symbol)
-    return Array.from(set).sort()
-  }, [items])
 
   const filtered = useMemo(() => {
     if (filter === ALL) return items
@@ -179,7 +183,7 @@ export default function NewsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>{t('news.allTickers')}</SelectItem>
-                {tickers.map((s) => (
+                {ownedTickers.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
                   </SelectItem>
@@ -213,12 +217,20 @@ export default function NewsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Newspaper className="size-4" />
-                {t('news.empty')}
+                {filter === ALL
+                  ? t('news.empty')
+                  : locale === 'fr'
+                    ? `Aucune actualite pour ${filter}`
+                    : `No news for ${filter}`}
               </CardTitle>
               <CardDescription className="text-xs">
-                {locale === 'fr'
-                  ? 'Clique sur Actualiser dans le header pour fetcher les news des tickers.'
-                  : 'Click Refresh in the header to fetch news for your tickers.'}
+                {filter === ALL
+                  ? locale === 'fr'
+                    ? 'Clique sur Actualiser dans le header pour fetcher les news des tickers.'
+                    : 'Click Refresh in the header to fetch news for your tickers.'
+                  : locale === 'fr'
+                    ? 'Les ETFs ont rarement des actualites qui leur sont propres. Si c\'est un ETF, ouvre plutot les positions individuelles.'
+                    : "ETFs rarely have ticker-specific news. If this is an ETF, open individual positions instead."}
               </CardDescription>
             </CardHeader>
           </Card>

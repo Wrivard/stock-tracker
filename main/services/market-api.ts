@@ -5,7 +5,7 @@ import * as frankfurter from './providers/frankfurter'
 import * as yahoo from './providers/yahoo'
 import { industryToSectorCode } from './industry-sector'
 import { listTickers as _listTickers, upsertTicker } from '../db/repo/tickers'
-import type { Ticker } from '../db/types'
+import { listHoldings } from '../db/repo/holdings'
 import { getSectorByCode } from '../db/repo/sectors'
 import { getApiKey } from './settings-keys'
 import type { Currency } from '../db/types'
@@ -321,25 +321,29 @@ export async function getPortfolioNews(opts?: {
   errors: Record<string, string>
 }> {
   const cachedOnly = opts?.cachedOnly ?? true
-  const tickers: Ticker[] = _listTickers()
+  // Iterate CURRENT holdings only (quantity > 0), not the full tickers
+  // table. If we still iterated _listTickers() we'd surface news for
+  // positions the user sold long ago — they'd appear in the page's
+  // ticker filter and in the items list, which is misleading.
+  const holdings = listHoldings()
   const items: AnnotatedNewsItem[] = []
   const errors: Record<string, string> = {}
-  for (const t of tickers) {
+  for (const h of holdings) {
     try {
       if (cachedOnly) {
-        const cached = readRaw<import('./types').NewsItem[]>(`news:${t.symbol}`)
+        const cached = readRaw<import('./types').NewsItem[]>(`news:${h.ticker}`)
         if (!cached) continue
         for (const n of cached.data) {
-          items.push({ ...n, tickerName: t.name, sectorCode: null })
+          items.push({ ...n, tickerName: h.name, sectorCode: null })
         }
       } else {
-        const { data } = await getNews(t.symbol)
+        const { data } = await getNews(h.ticker)
         for (const n of data) {
-          items.push({ ...n, tickerName: t.name, sectorCode: null })
+          items.push({ ...n, tickerName: h.name, sectorCode: null })
         }
       }
     } catch (err) {
-      errors[t.symbol] = err instanceof Error ? err.message : String(err)
+      errors[h.ticker] = err instanceof Error ? err.message : String(err)
     }
   }
   items.sort((a, b) => b.publishedAt - a.publishedAt)
