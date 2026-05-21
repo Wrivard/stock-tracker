@@ -1,17 +1,10 @@
 import Head from 'next/head'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  Pencil,
-  Plus,
-  Tag,
-  Trash2,
-} from 'lucide-react'
+import { ListOrdered, Pencil, Plus, Tag, Trash2 } from 'lucide-react'
 
-import type {
-  Transaction,
-  TransactionInput,
-} from '../../main/db/types'
+import type { Transaction, TransactionInput } from '../../main/db/types'
 import type { PortfolioOverview } from '../../main/services/portfolio'
 import { api, useApiResource } from '@/lib/api'
 import { useUi } from '@/lib/store'
@@ -43,7 +36,10 @@ export default function HoldingsPage() {
   const { t, locale } = useT()
   const displayCurrency = useUi((s) => s.displayCurrency)
   const refreshTick = useUi((s) => s.refreshTick)
+  const dataTick = useUi((s) => s.dataTick)
   const initialized = useUi((s) => s.initialized)
+  const openQuickTrade = useUi((s) => s.openQuickTrade)
+  const bumpData = useUi((s) => s.bumpData)
 
   const [overview, setOverview] = useState<PortfolioOverview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -64,9 +60,8 @@ export default function HoldingsPage() {
     if (!initialized) return
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayCurrency, refreshTick, initialized])
+  }, [displayCurrency, refreshTick, dataTick, initialized])
 
-  const [txDialogOpen, setTxDialogOpen] = useState(false)
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
   const [detailTicker, setDetailTicker] = useState<string | null>(null)
   const [sectorPickerFor, setSectorPickerFor] = useState<{
@@ -74,22 +69,12 @@ export default function HoldingsPage() {
     sectorId: number | null
   } | null>(null)
 
-  async function handleCreateTx(input: TransactionInput) {
-    await api().transactions.create(input)
-    toast.success(
-      locale === 'fr'
-        ? `Transaction ${input.kind} ajoutee pour ${input.ticker}`
-        : `${input.kind === 'buy' ? 'Buy' : 'Sell'} added for ${input.ticker}`,
-    )
-    await reload()
-  }
-
   async function handleUpdateTx(input: TransactionInput) {
     if (!editingTx) return
     await api().transactions.update(editingTx.id, input)
     toast.success(locale === 'fr' ? 'Transaction modifiee' : 'Transaction updated')
     setEditingTx(null)
-    await reload()
+    bumpData()
   }
 
   async function handleDeleteTicker(symbol: string) {
@@ -107,7 +92,7 @@ export default function HoldingsPage() {
       toast.success(
         locale === 'fr' ? `${symbol} supprime` : `${symbol} deleted`,
       )
-      await reload()
+      bumpData()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     }
@@ -123,23 +108,23 @@ export default function HoldingsPage() {
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-xl font-semibold tracking-tight">
               {t('holdings.title')}
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
               {t('holdings.subtitle')}
             </p>
           </div>
-          <Button onClick={() => setTxDialogOpen(true)}>
-            <Plus />
+          <Button onClick={() => openQuickTrade()} size="sm">
+            <Plus className="size-3.5" />
             {t('holdings.addTx')}
           </Button>
         </header>
 
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-lg border border-border bg-card overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>{t('holdings.col.ticker')}</TableHead>
                 <TableHead>{t('holdings.col.name')}</TableHead>
                 <TableHead>{t('holdings.col.sector')}</TableHead>
@@ -150,26 +135,26 @@ export default function HoldingsPage() {
                 <TableHead className="text-right">{t('holdings.col.marketValue')}</TableHead>
                 <TableHead className="text-right">{t('holdings.col.pnl')}</TableHead>
                 <TableHead className="text-right">{t('holdings.col.weight')}</TableHead>
-                <TableHead className="text-right"></TableHead>
+                <TableHead className="text-right w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && !overview && (
                 <>
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <TableRow key={i}>
+                    <TableRow key={i} className="hover:bg-transparent">
                       <TableCell colSpan={11}>
-                        <Skeleton className="h-6 w-full" />
+                        <Skeleton className="h-5 w-full" />
                       </TableCell>
                     </TableRow>
                   ))}
                 </>
               )}
               {overview && overview.positions.length === 0 && (
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableCell
                     colSpan={11}
-                    className="text-center text-sm text-muted-foreground py-8"
+                    className="text-center text-sm text-muted-foreground py-10"
                   >
                     {t('holdings.empty')}
                   </TableCell>
@@ -179,13 +164,12 @@ export default function HoldingsPage() {
                 overview.positions.map((p) => (
                   <TableRow key={p.ticker}>
                     <TableCell className="font-mono font-medium">
-                      <button
-                        type="button"
-                        className="hover:underline text-left"
-                        onClick={() => setDetailTicker(p.ticker)}
+                      <Link
+                        href={{ pathname: '/ticker', query: { symbol: p.ticker } }}
+                        className="hover:text-primary transition-colors"
                       >
                         {p.ticker}
-                      </button>
+                      </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground max-w-[180px] truncate">
                       {p.name ?? '—'}
@@ -243,8 +227,8 @@ export default function HoldingsPage() {
                       {p.changePercent !== null ? (
                         <span
                           className={cn(
-                            p.changePercent > 0 && 'text-emerald-500',
-                            p.changePercent < 0 && 'text-red-500',
+                            p.changePercent > 0 && 'text-positive',
+                            p.changePercent < 0 && 'text-negative',
                           )}
                         >
                           {p.changePercent >= 0 ? '+' : ''}
@@ -254,19 +238,19 @@ export default function HoldingsPage() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="text-right tabular-nums font-medium">
                       {formatMoney(p.marketValue, overview.displayCurrency, lc)}
                     </TableCell>
                     <TableCell
                       className={cn(
                         'text-right tabular-nums',
-                        p.pnl > 0 && 'text-emerald-500',
-                        p.pnl < 0 && 'text-red-500',
+                        p.pnl > 0 && 'text-positive',
+                        p.pnl < 0 && 'text-negative',
                       )}
                     >
                       {p.pnl >= 0 ? '+' : ''}
                       {formatMoney(p.pnl, overview.displayCurrency, lc)}
-                      <div className="text-xs opacity-70">
+                      <div className="text-[10px] opacity-70">
                         {p.pnlPct >= 0 ? '+' : ''}
                         {formatPercent(p.pnlPct / 100, lc)}
                       </div>
@@ -275,14 +259,30 @@ export default function HoldingsPage() {
                       {formatNumber(p.weight, lc, 1)}%
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleDeleteTicker(p.ticker)}
-                        aria-label={`Delete ${p.ticker}`}
-                      >
-                        <Trash2 />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setDetailTicker(p.ticker)}
+                          aria-label="View transactions"
+                          title={
+                            locale === 'fr'
+                              ? 'Voir les transactions'
+                              : 'View transactions'
+                          }
+                        >
+                          <ListOrdered />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleDeleteTicker(p.ticker)}
+                          aria-label={`Delete ${p.ticker}`}
+                          className="hover:text-negative"
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -290,12 +290,6 @@ export default function HoldingsPage() {
           </Table>
         </div>
       </div>
-
-      <TransactionForm
-        open={txDialogOpen}
-        onClose={() => setTxDialogOpen(false)}
-        onSubmit={handleCreateTx}
-      />
 
       <TransactionForm
         open={!!editingTx}
@@ -307,7 +301,7 @@ export default function HoldingsPage() {
       <TransactionsDialog
         ticker={detailTicker}
         onClose={() => setDetailTicker(null)}
-        onChanged={reload}
+        onChanged={() => bumpData()}
         onEdit={(tx) => {
           setDetailTicker(null)
           setEditingTx(tx)
@@ -318,7 +312,7 @@ export default function HoldingsPage() {
         ticker={sectorPickerFor?.ticker ?? null}
         currentSectorId={sectorPickerFor?.sectorId ?? null}
         onClose={() => setSectorPickerFor(null)}
-        onChanged={reload}
+        onChanged={() => bumpData()}
       />
     </>
   )
@@ -327,7 +321,7 @@ export default function HoldingsPage() {
 interface TransactionsDialogProps {
   ticker: string | null
   onClose: () => void
-  onChanged: () => Promise<void>
+  onChanged: () => void
   onEdit: (tx: Transaction) => void
 }
 
@@ -359,7 +353,7 @@ function TransactionsDialog({
         locale === 'fr' ? 'Transaction supprimee' : 'Transaction deleted',
       )
       await refetch()
-      await onChanged()
+      onChanged()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     }
@@ -379,7 +373,7 @@ function TransactionsDialog({
         <div className="rounded-md border max-h-[400px] overflow-auto">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Date</TableHead>
                 <TableHead>{t('tx.fields.kind')}</TableHead>
                 <TableHead className="text-right">{t('tx.fields.quantity')}</TableHead>
@@ -391,14 +385,14 @@ function TransactionsDialog({
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={7} className="text-center py-4">
                     {t('common.loading')}
                   </TableCell>
                 </TableRow>
               )}
               {!loading && txs && txs.length === 0 && (
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
                     {locale === 'fr' ? 'Aucune transaction.' : 'No transactions.'}
                   </TableCell>
@@ -410,7 +404,14 @@ function TransactionsDialog({
                   <TableRow key={tx.id}>
                     <TableCell className="tabular-nums">{tx.occurredAt}</TableCell>
                     <TableCell>
-                      <Badge variant={tx.kind === 'buy' ? 'default' : 'secondary'}>
+                      <Badge
+                        variant={tx.kind === 'buy' ? 'default' : 'outline'}
+                        className={
+                          tx.kind === 'buy'
+                            ? 'bg-positive/15 text-positive border-positive/20 hover:bg-positive/15'
+                            : ''
+                        }
+                      >
                         {tx.kind === 'buy' ? t('tx.fields.buy') : t('tx.fields.sell')}
                       </Badge>
                     </TableCell>
@@ -423,7 +424,7 @@ function TransactionsDialog({
                     <TableCell className="text-right tabular-nums">
                       {formatMoney(tx.fees, tx.currency, lc)}
                     </TableCell>
-                    <TableCell>{tx.currency}</TableCell>
+                    <TableCell className="text-muted-foreground">{tx.currency}</TableCell>
                     <TableCell className="text-right space-x-1">
                       <Button
                         variant="ghost"
@@ -438,6 +439,7 @@ function TransactionsDialog({
                         size="icon-sm"
                         onClick={() => handleDelete(tx.id)}
                         aria-label="Delete"
+                        className="hover:text-negative"
                       >
                         <Trash2 />
                       </Button>

@@ -100,7 +100,7 @@ export default function SettingsPage() {
       </Head>
       <div className="p-6 max-w-3xl mx-auto space-y-6">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             {t('settings.title')}
           </h1>
         </header>

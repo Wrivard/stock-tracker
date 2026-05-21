@@ -29,7 +29,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-const TOLERANCE = 5 // percentage-point threshold to flag a sector as off-target
+const REBALANCE_TOLERANCE = 5
+
 
 interface RebalanceRow {
   code: string
@@ -54,6 +55,7 @@ export default function RebalancePage() {
   const [targets, setTargets] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [savingFor, setSavingFor] = useState<string | null>(null)
+  const dataTick = useUi((s) => s.dataTick)
 
   const reload = async () => {
     setLoading(true)
@@ -85,7 +87,7 @@ export default function RebalancePage() {
     if (!initialized) return
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayCurrency, refreshTick, initialized])
+  }, [displayCurrency, refreshTick, dataTick, initialized])
 
   const totalTarget = useMemo(
     () => Object.values(targets).reduce((a, b) => a + b, 0),
@@ -140,7 +142,7 @@ export default function RebalancePage() {
       </Head>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             {t('rebalance.title')}
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
@@ -163,8 +165,8 @@ export default function RebalancePage() {
                     </CardTitle>
                     <CardDescription>
                       {locale === 'fr'
-                        ? `Valeur totale : ${formatMoney(overview.totalValue, overview.displayCurrency, lc)}. Tolerance ±${TOLERANCE} %.`
-                        : `Total value: ${formatMoney(overview.totalValue, overview.displayCurrency, lc)}. Tolerance ±${TOLERANCE}%.`}
+                        ? `Valeur totale : ${formatMoney(overview.totalValue, overview.displayCurrency, lc)}. Tolerance ±${REBALANCE_TOLERANCE} %.`
+                        : `Total value: ${formatMoney(overview.totalValue, overview.displayCurrency, lc)}. Tolerance ±${REBALANCE_TOLERANCE}%.`}
                     </CardDescription>
                   </div>
                   <Badge
@@ -211,9 +213,9 @@ export default function RebalancePage() {
                     </TableHeader>
                     <TableBody>
                       {rows.map((r) => {
-                        const off = Math.abs(r.deltaPct) > TOLERANCE && r.targetPct > 0
-                        const needBuy = r.deltaPct < -TOLERANCE
-                        const needSell = r.deltaPct > TOLERANCE
+                        const off = Math.abs(r.deltaPct) > REBALANCE_TOLERANCE && r.targetPct > 0
+                        const needBuy = r.deltaPct < -REBALANCE_TOLERANCE
+                        const needSell = r.deltaPct > REBALANCE_TOLERANCE
                         return (
                           <TableRow key={r.code}>
                             <TableCell>
@@ -269,7 +271,7 @@ export default function RebalancePage() {
                               className={cn(
                                 'text-right tabular-nums',
                                 off && needSell && 'text-amber-500',
-                                off && needBuy && 'text-blue-500',
+                                off && needBuy && 'text-blue-400',
                               )}
                             >
                               {r.targetPct > 0 ? (
@@ -285,7 +287,7 @@ export default function RebalancePage() {
                               className={cn(
                                 'text-right tabular-nums',
                                 off && needSell && 'text-amber-500',
-                                off && needBuy && 'text-blue-500',
+                                off && needBuy && 'text-blue-400',
                               )}
                             >
                               {r.targetPct > 0 ? (
@@ -305,7 +307,7 @@ export default function RebalancePage() {
                               {off && needBuy && (
                                 <Badge
                                   variant="outline"
-                                  className="text-blue-500 border-blue-500/40"
+                                  className="text-blue-400 border-blue-400/40 bg-blue-400/5"
                                 >
                                   <ArrowDownToLine className="size-3" />
                                   {locale === 'fr' ? 'Acheter' : 'Buy'}{' '}
@@ -319,7 +321,7 @@ export default function RebalancePage() {
                               {off && needSell && (
                                 <Badge
                                   variant="outline"
-                                  className="text-amber-500 border-amber-500/40"
+                                  className="text-amber-500 border-amber-500/40 bg-amber-500/5"
                                 >
                                   <ArrowUpFromLine className="size-3" />
                                   {locale === 'fr' ? 'Vendre' : 'Sell'}{' '}
@@ -331,9 +333,12 @@ export default function RebalancePage() {
                                 </Badge>
                               )}
                               {!off && r.targetPct > 0 && (
-                                <Badge variant="secondary">
+                                <Badge
+                                  variant="outline"
+                                  className="border-positive/30 text-positive bg-positive/5"
+                                >
                                   <Check className="size-3" />
-                                  {locale === 'fr' ? 'OK' : 'OK'}
+                                  OK
                                 </Badge>
                               )}
                             </TableCell>

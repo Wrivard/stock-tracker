@@ -1,18 +1,32 @@
 import Head from 'next/head'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   AlertTriangle,
-  Coins,
+  ArrowUpRight,
+  Plus,
+  Sparkles,
+  Target,
   TrendingDown,
   TrendingUp,
   Wallet,
 } from 'lucide-react'
 
+import type {
+  Setting,
+  Transaction,
+} from '../../main/db/types'
+import type { PortfolioOverview } from '../../main/services/portfolio'
+import type { PortfolioSnapshot } from '../../main/services/snapshots'
+import type { AnnotatedNewsItem } from '../../main/services/market-api'
 import { api } from '@/lib/api'
 import { useUi } from '@/lib/store'
 import { useT } from '@/lib/i18n'
 import { formatMoney, formatNumber, formatPercent } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -23,40 +37,72 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { SectorPieChart } from '@/components/dashboard/SectorPieChart'
-import type { PortfolioOverview } from '../../main/services/portfolio'
+import { TrendSparkline } from '@/components/dashboard/TrendSparkline'
 
 export default function HomePage() {
   const { t, locale } = useT()
   const displayCurrency = useUi((s) => s.displayCurrency)
   const refreshTick = useUi((s) => s.refreshTick)
+  const dataTick = useUi((s) => s.dataTick)
   const initialized = useUi((s) => s.initialized)
+  const openQuickTrade = useUi((s) => s.openQuickTrade)
 
   const [overview, setOverview] = useState<PortfolioOverview | null>(null)
+  const [snapshots, setSnapshots] = useState<PortfolioSnapshot[]>([])
+  const [recentTx, setRecentTx] = useState<Transaction[]>([])
+  const [news, setNews] = useState<AnnotatedNewsItem[]>([])
+  const [targets, setTargets] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!initialized) return
     let cancelled = false
     setLoading(true)
-    api()
-      .portfolio.overview(displayCurrency)
-      .then((data) => {
-        if (!cancelled) setOverview(data)
+    Promise.all([
+      api().portfolio.overview(displayCurrency),
+      api().snapshots.list(),
+      api().transactions.list(),
+      api().market.portfolioNews().catch(() => ({ items: [], errors: {} })),
+      api().settings.list(),
+    ])
+      .then(([ov, snaps, txs, n, settings]) => {
+        if (cancelled) return
+        setOverview(ov)
+        setSnapshots(snaps)
+        setRecentTx(txs.slice(0, 5))
+        setNews(n.items.slice(0, 5))
+        const tgts: Record<string, number> = {}
+        for (const s of settings as Setting[]) {
+          if (s.key.startsWith('targets.')) {
+            const v = Number(s.value)
+            if (Number.isFinite(v)) tgts[s.key.slice('targets.'.length)] = v
+          }
+        }
+        setTargets(tgts)
       })
-      .catch((err: Error) => {
-        if (!cancelled) console.error('overview failed', err)
-      })
+      .catch((err: Error) => console.error('dashboard load', err))
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [displayCurrency, refreshTick, initialized])
+  }, [displayCurrency, refreshTick, dataTick, initialized])
 
+  const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
   const isEmpty = overview && overview.positions.length === 0
   const noCachedQuotes =
-    overview && overview.positions.length > 0 && overview.positions.every((p) => p.currentPrice === null)
+    overview &&
+    overview.positions.length > 0 &&
+    overview.positions.every((p) => p.currentPrice === null)
+
+  async function openExternal(url: string) {
+    try {
+      await api().shell.openExternal(url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   return (
     <>
@@ -64,16 +110,23 @@ export default function HomePage() {
         <title>{`${t('nav.dashboard')} · Portfolio Tracker`}</title>
       </Head>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t('nav.dashboard')}
-          </h1>
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">
+              {t('nav.dashboard')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {locale === 'fr'
+                ? 'Vue agregee : valeur, P&L, allocation, activite recente.'
+                : 'Aggregated view: value, P&L, allocation, recent activity.'}
+            </p>
+          </div>
         </header>
 
         {loading && !overview && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-xl" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 rounded-lg" />
             ))}
           </div>
         )}
@@ -81,105 +134,125 @@ export default function HomePage() {
         {overview && (
           <>
             {(overview.missingApiKey.finnhub || overview.missingApiKey.twelvedata) && (
-              <Card className="border-amber-500/40 bg-amber-500/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <AlertTriangle className="size-4 text-amber-500" />
-                    {locale === 'fr' ? 'Cles API manquantes' : 'API keys missing'}
-                  </CardTitle>
-                  <CardDescription>
-                    {locale === 'fr'
-                      ? 'Configure tes cles dans Parametres pour activer les cotations en temps reel.'
-                      : 'Set your keys in Settings to enable live quotes.'}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="size-4 text-amber-500 shrink-0 mt-px" />
+                  <div>
+                    <p className="text-sm font-medium">
+                      {locale === 'fr'
+                        ? 'Cles API manquantes'
+                        : 'API keys missing'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {locale === 'fr'
+                        ? 'Configure tes cles pour activer les cotations live.'
+                        : 'Set your keys to enable live quotes.'}
+                    </p>
+                  </div>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/settings">
+                    {locale === 'fr' ? 'Parametres' : 'Settings'}
+                  </Link>
+                </Button>
+              </div>
             )}
 
             {isEmpty && (
-              <Card>
+              <Card className="border-dashed">
                 <CardHeader>
-                  <CardTitle>{t('dashboard.empty')}</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="size-4 text-primary" />
+                    {locale === 'fr'
+                      ? "Commence par une transaction"
+                      : 'Start with a transaction'}
+                  </CardTitle>
+                  <CardDescription>
+                    {locale === 'fr'
+                      ? 'Le dashboard se rempliera des que tu auras une premiere position.'
+                      : 'The dashboard fills up as soon as you have a first position.'}
+                  </CardDescription>
                 </CardHeader>
+                <CardContent>
+                  <Button onClick={() => openQuickTrade()}>
+                    <Plus className="size-3.5" />
+                    {locale === 'fr' ? 'Ajouter une transaction' : 'Add transaction'}
+                  </Button>
+                </CardContent>
               </Card>
             )}
 
             {!isEmpty && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* KPIs */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   <KpiCard
                     title={t('dashboard.totalValue')}
-                    value={formatMoney(
-                      overview.totalValue,
-                      overview.displayCurrency,
-                      locale === 'fr' ? 'fr-CA' : 'en-CA',
-                    )}
+                    value={formatMoney(overview.totalValue, overview.displayCurrency, lc)}
                     delta={{
-                      value: `${overview.totalPnl >= 0 ? '+' : ''}${formatMoney(
-                        overview.totalPnl,
-                        overview.displayCurrency,
-                        locale === 'fr' ? 'fr-CA' : 'en-CA',
-                      )} (${formatPercent(overview.totalPnlPct / 100, locale === 'fr' ? 'fr-CA' : 'en-CA')})`,
-                      positive: overview.totalPnl === 0 ? null : overview.totalPnl > 0,
+                      value: `${overview.totalPnl >= 0 ? '+' : ''}${formatMoney(overview.totalPnl, overview.displayCurrency, lc)} · ${formatPercent(overview.totalPnlPct / 100, lc)}`,
+                      positive:
+                        overview.totalPnl === 0 ? null : overview.totalPnl > 0,
                     }}
-                    icon={<Wallet className="size-4" />}
+                    icon={<Wallet className="size-3.5" />}
+                    trail={
+                      snapshots.length > 1 ? (
+                        <TrendSparkline
+                          snapshots={snapshots}
+                          displayCurrency={overview.displayCurrency}
+                        />
+                      ) : null
+                    }
                   />
                   <KpiCard
                     title={t('dashboard.dayChange')}
-                    value={`${overview.dayChange >= 0 ? '+' : ''}${formatMoney(
-                      overview.dayChange,
-                      overview.displayCurrency,
-                      locale === 'fr' ? 'fr-CA' : 'en-CA',
-                    )}`}
+                    value={`${overview.dayChange >= 0 ? '+' : ''}${formatMoney(overview.dayChange, overview.displayCurrency, lc)}`}
                     delta={{
-                      value: formatPercent(
-                        overview.dayChangePct / 100,
-                        locale === 'fr' ? 'fr-CA' : 'en-CA',
-                      ),
+                      value: `${overview.dayChange >= 0 ? '+' : ''}${formatPercent(overview.dayChangePct / 100, lc)}`,
                       positive:
                         overview.dayChange === 0 ? null : overview.dayChange > 0,
                     }}
                     icon={
                       overview.dayChange >= 0 ? (
-                        <TrendingUp className="size-4 text-emerald-500" />
+                        <TrendingUp className="size-3.5 text-positive" />
                       ) : (
-                        <TrendingDown className="size-4 text-red-500" />
+                        <TrendingDown className="size-3.5 text-negative" />
                       )
                     }
                   />
                   <KpiCard
-                    title={
-                      locale === 'fr' ? 'Cout total investi' : 'Total cost basis'
-                    }
-                    value={formatMoney(
-                      overview.totalCost,
-                      overview.displayCurrency,
-                      locale === 'fr' ? 'fr-CA' : 'en-CA',
-                    )}
+                    title={locale === 'fr' ? 'Cout investi' : 'Cost basis'}
+                    value={formatMoney(overview.totalCost, overview.displayCurrency, lc)}
+                    hint={`${overview.positions.length} ${locale === 'fr' ? 'positions · FX' : 'positions · FX'} ${formatNumber(overview.fxUsdToCad, lc, 4)}`}
+                  />
+                  <KpiCard
+                    title={locale === 'fr' ? 'Secteurs' : 'Sectors'}
+                    value={overview.sectors.length}
                     hint={
-                      locale === 'fr'
-                        ? `${overview.positions.length} positions · FX USD→CAD ${formatNumber(overview.fxUsdToCad, 'fr-CA', 4)}`
-                        : `${overview.positions.length} positions · FX USD→CAD ${formatNumber(overview.fxUsdToCad, 'en-CA', 4)}`
+                      Object.keys(targets).length > 0
+                        ? `${Object.keys(targets).length} ${locale === 'fr' ? 'cible(s) definie(s)' : 'target(s) set'}`
+                        : locale === 'fr'
+                          ? 'Aucune cible definie'
+                          : 'No targets set'
                     }
-                    icon={<Coins className="size-4" />}
+                    icon={<Target className="size-3.5" />}
                   />
                 </div>
 
                 {noCachedQuotes && (
-                  <Card className="border-blue-500/40 bg-blue-500/5">
-                    <CardHeader>
-                      <CardTitle className="text-base">
-                        {t('dashboard.noQuotes')}
-                      </CardTitle>
-                    </CardHeader>
-                  </Card>
+                  <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-sm">
+                    {t('dashboard.noQuotes')}
+                  </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Allocation + Sector targets */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                   <Card className="lg:col-span-2">
-                    <CardHeader>
-                      <CardTitle>{t('dashboard.allocation')}</CardTitle>
-                      <CardDescription>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">
+                        {t('dashboard.allocation')}
+                      </CardTitle>
+                      <CardDescription className="text-xs">
                         {locale === 'fr'
                           ? 'Repartition de la valeur de marche par secteur.'
                           : 'Market value breakdown by sector.'}
@@ -193,7 +266,25 @@ export default function HomePage() {
                     </CardContent>
                   </Card>
 
+                  <SectorTargetsCompact
+                    sectors={overview.sectors}
+                    targets={targets}
+                    locale={locale}
+                  />
+                </div>
+
+                {/* Performers + News + Activity */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                   <PerformersCard overview={overview} locale={locale} />
+                  <NewsWidget
+                    news={news}
+                    locale={locale}
+                    onOpen={openExternal}
+                  />
+                  <ActivityWidget
+                    transactions={recentTx}
+                    locale={locale}
+                  />
                 </div>
               </>
             )}
@@ -201,6 +292,100 @@ export default function HomePage() {
         )}
       </div>
     </>
+  )
+}
+
+interface SectorTargetsCompactProps {
+  sectors: PortfolioOverview['sectors']
+  targets: Record<string, number>
+  locale: 'fr' | 'en'
+}
+
+function SectorTargetsCompact({ sectors, targets, locale }: SectorTargetsCompactProps) {
+  const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
+  const tracked = sectors.filter((s) => (targets[s.code] ?? 0) > 0)
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Target className="size-3.5 text-primary" />
+            {locale === 'fr' ? 'Cibles' : 'Targets'}
+          </CardTitle>
+          <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs">
+            <Link href="/rebalance">
+              {locale === 'fr' ? 'Editer' : 'Edit'}
+              <ArrowUpRight className="size-3" />
+            </Link>
+          </Button>
+        </div>
+        <CardDescription className="text-xs">
+          {locale === 'fr' ? 'Actuel vs cible' : 'Current vs target'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {tracked.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-4 text-center">
+            {locale === 'fr'
+              ? 'Aucune cible definie. Configure-les dans Reequilibrage.'
+              : 'No targets set. Configure them in Rebalance.'}
+          </p>
+        ) : (
+          <ul className="space-y-2.5">
+            {tracked.map((s) => {
+              const target = targets[s.code]
+              const delta = s.percent - target
+              return (
+                <li key={s.code} className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="flex items-center gap-1.5 text-foreground">
+                      <span
+                        className="inline-block size-1.5 rounded-full"
+                        style={{ backgroundColor: s.color ?? 'currentColor' }}
+                      />
+                      {locale === 'fr' ? s.labelFr : s.labelEn}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatNumber(s.percent, lc, 1)}%
+                      <span className="opacity-60"> / {formatNumber(target, lc, 1)}%</span>
+                    </span>
+                  </div>
+                  <div className="h-1 rounded-full bg-muted overflow-hidden relative">
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${Math.min(100, s.percent)}%`,
+                        backgroundColor: s.color ?? 'var(--primary)',
+                      }}
+                    />
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-foreground/50"
+                      style={{ left: `${Math.min(100, target)}%` }}
+                    />
+                  </div>
+                  <div
+                    className={cn(
+                      'text-[10px] tabular-nums',
+                      Math.abs(delta) < 0.5
+                        ? 'text-muted-foreground'
+                        : delta > 5
+                          ? 'text-amber-500'
+                          : delta < -5
+                            ? 'text-blue-400'
+                            : 'text-muted-foreground',
+                    )}
+                  >
+                    {delta >= 0 ? '+' : ''}
+                    {formatNumber(delta, lc, 1)} pp
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -218,28 +403,26 @@ function PerformersCard({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>
-          {locale === 'fr' ? 'Top / Bottom' : 'Top / Bottom'}
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">
+          {locale === 'fr' ? 'Performance' : 'Performance'}
         </CardTitle>
-        <CardDescription>
-          {locale === 'fr'
-            ? 'Meilleures et pires positions par P&L %.'
-            : 'Best and worst positions by P&L %.'}
+        <CardDescription className="text-xs">
+          {locale === 'fr' ? 'Top / Bottom par P&L %' : 'Top / Bottom by P&L %'}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 text-sm">
+      <CardContent className="space-y-3 text-sm">
         <PerformerRow
           title={locale === 'fr' ? 'Top' : 'Top'}
           positions={top}
           locale={lc}
-          accent="emerald"
+          tone="positive"
         />
         <PerformerRow
           title={locale === 'fr' ? 'Bottom' : 'Bottom'}
           positions={bottom}
           locale={lc}
-          accent="red"
+          tone="negative"
         />
       </CardContent>
     </Card>
@@ -250,43 +433,171 @@ interface PerformerRowProps {
   title: string
   positions: PortfolioOverview['positions']
   locale: string
-  accent: 'emerald' | 'red'
+  tone: 'positive' | 'negative'
 }
 
-function PerformerRow({ title, positions, locale, accent }: PerformerRowProps) {
+function PerformerRow({ title, positions, locale, tone }: PerformerRowProps) {
   if (positions.length === 0) return null
   return (
     <div className="space-y-1">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
         {title}
       </div>
-      <ul className="space-y-1">
+      <ul className="space-y-0.5">
         {positions.map((p) => (
-          <li
-            key={p.ticker}
-            className="flex items-center justify-between gap-2"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Badge variant="secondary" className="font-mono">
-                {p.ticker}
-              </Badge>
-              <span className="text-muted-foreground truncate">
-                {p.name ?? p.sectorLabelFr ?? '—'}
-              </span>
-            </div>
-            <span
-              className={`tabular-nums font-medium ${
-                accent === 'emerald'
-                  ? 'text-emerald-500'
-                  : 'text-red-500'
-              }`}
+          <li key={p.ticker}>
+            <Link
+              href={{ pathname: '/ticker', query: { symbol: p.ticker } }}
+              className="flex items-center justify-between gap-2 py-1 rounded hover:bg-muted/50 px-1.5 -mx-1.5 transition-colors"
             >
-              {p.pnlPct >= 0 ? '+' : ''}
-              {formatPercent(p.pnlPct / 100, locale)}
-            </span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-xs font-medium">{p.ticker}</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {p.name ?? p.sectorLabelFr ?? '—'}
+                </span>
+              </div>
+              <span
+                className={cn(
+                  'tabular-nums font-medium text-xs',
+                  tone === 'positive' ? 'text-positive' : 'text-negative',
+                )}
+              >
+                {p.pnlPct >= 0 ? '+' : ''}
+                {formatPercent(p.pnlPct / 100, locale)}
+              </span>
+            </Link>
           </li>
         ))}
       </ul>
     </div>
+  )
+}
+
+interface NewsWidgetProps {
+  news: AnnotatedNewsItem[]
+  locale: 'fr' | 'en'
+  onOpen: (url: string) => void
+}
+
+function NewsWidget({ news, locale, onOpen }: NewsWidgetProps) {
+  const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">
+            {locale === 'fr' ? 'Actualites' : 'News'}
+          </CardTitle>
+          <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs">
+            <Link href="/news">
+              {locale === 'fr' ? 'Tout' : 'All'}
+              <ArrowUpRight className="size-3" />
+            </Link>
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {news.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-4 text-center">
+            {locale === 'fr' ? 'Pas de news en cache.' : 'No cached news.'}
+          </p>
+        ) : (
+          <ul className="space-y-0.5">
+            {news.map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(n.url)}
+                  className="w-full text-left group py-1.5 rounded hover:bg-muted/50 px-1.5 -mx-1.5 transition-colors"
+                >
+                  <div className="text-xs font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                    {n.headline}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                    <span className="font-mono">{n.symbol}</span>
+                    <span>·</span>
+                    <span>{new Date(n.publishedAt).toLocaleDateString(lc)}</span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+interface ActivityWidgetProps {
+  transactions: Transaction[]
+  locale: 'fr' | 'en'
+}
+
+function ActivityWidget({ transactions, locale }: ActivityWidgetProps) {
+  const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">
+            {locale === 'fr' ? 'Activite' : 'Activity'}
+          </CardTitle>
+          <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs">
+            <Link href="/holdings">
+              {locale === 'fr' ? 'Holdings' : 'Holdings'}
+              <ArrowUpRight className="size-3" />
+            </Link>
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {transactions.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-4 text-center">
+            {locale === 'fr' ? 'Aucune transaction.' : 'No transactions.'}
+          </p>
+        ) : (
+          <ul className="space-y-0.5">
+            {transactions.map((tx) => (
+              <li key={tx.id}>
+                <Link
+                  href={{ pathname: '/ticker', query: { symbol: tx.ticker } }}
+                  className="flex items-center justify-between gap-2 py-1.5 rounded hover:bg-muted/50 px-1.5 -mx-1.5 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'text-[10px] h-4 px-1.5 font-normal',
+                        tx.kind === 'buy'
+                          ? 'border-positive/30 text-positive bg-positive/5'
+                          : 'border-negative/30 text-negative bg-negative/5',
+                      )}
+                    >
+                      {tx.kind === 'buy'
+                        ? locale === 'fr'
+                          ? 'Achat'
+                          : 'Buy'
+                        : locale === 'fr'
+                          ? 'Vente'
+                          : 'Sell'}
+                    </Badge>
+                    <span className="font-mono text-xs font-medium">
+                      {tx.ticker}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-right tabular-nums text-muted-foreground">
+                    <div>
+                      {formatNumber(tx.quantity, lc, 2)} @{' '}
+                      {formatMoney(tx.price, tx.currency, lc)}
+                    </div>
+                    <div className="opacity-60">{tx.occurredAt}</div>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   )
 }

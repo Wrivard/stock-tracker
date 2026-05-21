@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
-import { Moon, RefreshCw, Sun } from 'lucide-react'
+import { Moon, Plus, RefreshCw, Sun } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useUi } from '@/lib/store'
@@ -30,11 +30,9 @@ export function AppHeader() {
   const apiKeyStatus = useUi((s) => s.apiKeyStatus)
   const lastRefreshAt = useUi((s) => s.lastRefreshAt)
   const bumpRefresh = useUi((s) => s.bumpRefresh)
+  const openQuickTrade = useUi((s) => s.openQuickTrade)
   const { theme, setTheme } = useTheme()
   const [refreshing, setRefreshing] = useState(false)
-  // next-themes resolves the theme client-side only, so the Sun/Moon icon
-  // can't be rendered during SSR/SSG without a hydration mismatch. We delay
-  // the icon until after mount.
   const [themeMounted, setThemeMounted] = useState(false)
   useEffect(() => setThemeMounted(true), [])
 
@@ -71,11 +69,34 @@ export function AppHeader() {
   }, [apiKeyStatus.finnhub, locale, bumpRefresh])
 
   return (
-    <TooltipProvider>
-      <header className="h-14 border-b border-border bg-background/80 backdrop-blur flex items-center justify-end gap-3 px-4">
+    <TooltipProvider delayDuration={250}>
+      <header className="h-12 border-b border-border bg-background flex items-center justify-end gap-2 px-4">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="text-xs text-muted-foreground tabular-nums">
+            <Button
+              size="sm"
+              onClick={() => openQuickTrade()}
+              className="gap-1.5 font-medium"
+            >
+              <Plus className="size-3.5" />
+              {locale === 'fr' ? 'Nouvelle transaction' : 'New trade'}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <span className="text-[11px]">
+              {locale === 'fr' ? 'Raccourci' : 'Shortcut'}
+              <kbd className="ml-2 px-1 py-px rounded bg-muted text-[10px] font-mono">
+                Ctrl + N
+              </kbd>
+            </span>
+          </TooltipContent>
+        </Tooltip>
+
+        <div className="mx-1 h-5 w-px bg-border" />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-[11px] text-muted-foreground tabular-nums px-2">
               {formatRelativeTime(lastRefreshAt, locale)}
             </span>
           </TooltipTrigger>
@@ -87,8 +108,8 @@ export function AppHeader() {
         </Tooltip>
 
         {!apiKeyStatus.finnhub && (
-          <Badge variant="destructive" className="text-xs">
-            {locale === 'fr' ? 'Cles API manquantes' : 'API keys missing'}
+          <Badge variant="destructive" className="text-[10px]">
+            {locale === 'fr' ? 'Cles manquantes' : 'Keys missing'}
           </Badge>
         )}
 
@@ -96,7 +117,10 @@ export function AppHeader() {
           value={displayCurrency}
           onValueChange={(v) => setDisplayCurrency(v as 'USD' | 'CAD')}
         >
-          <SelectTrigger className="h-9 w-[80px]" aria-label="display currency">
+          <SelectTrigger
+            className="h-8 w-[68px] text-xs"
+            aria-label="display currency"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -106,7 +130,10 @@ export function AppHeader() {
         </Select>
 
         <Select value={locale} onValueChange={(v) => setLocale(v as 'fr' | 'en')}>
-          <SelectTrigger className="h-9 w-[70px]" aria-label="language">
+          <SelectTrigger
+            className="h-8 w-[60px] text-xs"
+            aria-label="language"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -125,7 +152,11 @@ export function AppHeader() {
               suppressHydrationWarning
             >
               {themeMounted ? (
-                theme === 'dark' ? <Sun /> : <Moon />
+                theme === 'dark' ? (
+                  <Sun />
+                ) : (
+                  <Moon />
+                )
               ) : (
                 <span className="size-4" />
               )}
@@ -136,15 +167,20 @@ export function AppHeader() {
           </TooltipContent>
         </Tooltip>
 
-        <Button
-          variant="default"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
-          <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-          {refreshing ? t('common.refreshing') : t('common.refresh')}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              aria-label={t('common.refresh')}
+            >
+              <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('common.refresh')}</TooltipContent>
+        </Tooltip>
       </header>
     </TooltipProvider>
   )

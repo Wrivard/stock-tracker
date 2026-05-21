@@ -13,13 +13,24 @@ interface UiState {
   initialized: boolean
   // Bump this whenever quotes are refreshed; pages subscribe and refetch.
   refreshTick: number
+  // Bump this whenever a transaction is created/updated/deleted so all
+  // pages that depend on positions refetch (Dashboard, Holdings, ticker
+  // detail page, Rebalance).
+  dataTick: number
   lastRefreshAt: number | null
+  // Global Quick Trade dialog state — opened from anywhere via the header
+  // button or Ctrl+N. Optionally pre-fills the ticker field.
+  quickTradeOpen: boolean
+  quickTradeDefaultTicker: string | null
   loadFromBackend: () => Promise<void>
   setDisplayCurrency: (c: Currency) => Promise<void>
   setLocale: (l: Locale) => Promise<void>
   setRefreshIntervalSec: (s: number) => Promise<void>
   refreshApiKeyStatus: () => Promise<void>
   bumpRefresh: () => void
+  bumpData: () => void
+  openQuickTrade: (defaultTicker?: string) => void
+  closeQuickTrade: () => void
 }
 
 export const useUi = create<UiState>((set) => ({
@@ -29,7 +40,10 @@ export const useUi = create<UiState>((set) => ({
   apiKeyStatus: { finnhub: false, twelvedata: false },
   initialized: false,
   refreshTick: 0,
+  dataTick: 0,
   lastRefreshAt: null,
+  quickTradeOpen: false,
+  quickTradeDefaultTicker: null,
 
   loadFromBackend: async () => {
     const a = api()
@@ -70,6 +84,14 @@ export const useUi = create<UiState>((set) => ({
 
   bumpRefresh: () =>
     set((s) => ({ refreshTick: s.refreshTick + 1, lastRefreshAt: Date.now() })),
+
+  bumpData: () => set((s) => ({ dataTick: s.dataTick + 1 })),
+
+  openQuickTrade: (defaultTicker) =>
+    set({ quickTradeOpen: true, quickTradeDefaultTicker: defaultTicker ?? null }),
+
+  closeQuickTrade: () =>
+    set({ quickTradeOpen: false, quickTradeDefaultTicker: null }),
 }))
 
 // Helper to read the current display currency synchronously inside callbacks.

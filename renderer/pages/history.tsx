@@ -44,6 +44,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<Period>('1M')
   const [capturing, setCapturing] = useState(false)
+  const dataTick = useUi((s) => s.dataTick)
 
   const reload = async () => {
     setLoading(true)
@@ -61,7 +62,7 @@ export default function HistoryPage() {
     if (!initialized) return
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialized, refreshTick])
+  }, [initialized, refreshTick, dataTick])
 
   const filtered = useMemo(() => {
     const c = cutoffMs(period)
@@ -117,7 +118,7 @@ export default function HistoryPage() {
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-xl font-semibold tracking-tight">
               {t('history.title')}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -201,9 +202,9 @@ export default function HistoryPage() {
                 <CardTitle
                   className={`tabular-nums ${
                     periodChange > 0
-                      ? 'text-emerald-500'
+                      ? 'text-positive'
                       : periodChange < 0
-                        ? 'text-red-500'
+                        ? 'text-negative'
                         : ''
                   }`}
                 >

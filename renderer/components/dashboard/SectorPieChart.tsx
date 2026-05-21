@@ -38,15 +38,13 @@ export function SectorPieChart({ sectors, locale }: SectorPieChartProps) {
   if (sectors.length === 0) {
     return (
       <div className="text-sm text-muted-foreground text-center py-12">
-        {locale === 'fr'
-          ? "Aucune donnee a afficher."
-          : 'No data to display.'}
+        {locale === 'fr' ? 'Aucune donnee a afficher.' : 'No data to display.'}
       </div>
     )
   }
 
   return (
-    <ChartContainer config={config} className="aspect-square max-h-[280px] mx-auto">
+    <ChartContainer config={config} className="aspect-[4/3] max-h-[260px] mx-auto">
       <PieChart>
         <ChartTooltip
           cursor={false}
@@ -56,17 +54,18 @@ export function SectorPieChart({ sectors, locale }: SectorPieChartProps) {
           data={data}
           dataKey="value"
           nameKey="code"
-          innerRadius={55}
-          outerRadius={90}
+          innerRadius={58}
+          outerRadius={92}
           paddingAngle={2}
-          strokeWidth={2}
+          strokeWidth={1.5}
+          stroke="var(--background)"
         >
           {data.map((d) => (
             <Cell key={d.code} fill={d.fill} />
           ))}
         </Pie>
         <ChartLegend
-          content={<ChartLegendContent nameKey="code" />}
+          content={<ChartLegendContent nameKey="code" className="text-[11px]" />}
           verticalAlign="bottom"
         />
       </PieChart>
