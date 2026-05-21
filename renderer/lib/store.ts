@@ -77,13 +77,36 @@ export const useUi = create<UiState>((set) => ({
   },
 
   setDisplayCurrency: async (c) => {
-    set({ displayCurrency: c })
-    await api().settings.set('app.displayCurrency', c)
+    // Defensive: ignore garbage input. Without this, a stray
+    // onValueChange firing with something other than USD/CAD would
+    // poison the store and leave the Select trigger desynced from
+    // its options (Radix renders the placeholder when value matches
+    // no item, which then looks "stuck" on whatever was last valid).
+    if (c !== 'USD' && c !== 'CAD') {
+      console.warn('[store] ignoring invalid displayCurrency:', c)
+      return
+    }
+    // Functional set form, so React's batched render sees the latest
+    // state even if multiple setters fire in the same tick.
+    set((s) => ({ ...s, displayCurrency: c }))
+    try {
+      await api().settings.set('app.displayCurrency', c)
+    } catch (err) {
+      console.error('[store] persisting displayCurrency failed:', err)
+    }
   },
 
   setLocale: async (l) => {
-    set({ locale: l })
-    await api().settings.set('app.locale', l)
+    if (l !== 'fr' && l !== 'en') {
+      console.warn('[store] ignoring invalid locale:', l)
+      return
+    }
+    set((s) => ({ ...s, locale: l }))
+    try {
+      await api().settings.set('app.locale', l)
+    } catch (err) {
+      console.error('[store] persisting locale failed:', err)
+    }
   },
 
   setRefreshIntervalSec: async (s) => {
