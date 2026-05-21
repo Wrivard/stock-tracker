@@ -39,6 +39,12 @@ export interface NewsItem {
   url: string
   publishedAt: number
   imageUrl: string | null
+  // When this article actually came from one of an ETF's top holdings
+  // (e.g. an Apple article surfaced for XEQT because XEQT holds AAPL),
+  // we tag the parent ETF here so the UI can render "via XEQT" and the
+  // News page filter can match either the direct symbol or the ETF
+  // wrapper. Absent for plain ticker news.
+  viaEtf?: string
 }
 
 export interface HistoricalCandle {

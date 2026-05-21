@@ -605,8 +605,13 @@ function NewsWidget({ news, locale, onOpen }: NewsWidgetProps) {
                   <div className="text-xs font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2 break-words">
                     {n.headline}
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                  <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono">{n.symbol}</span>
+                    {n.viaEtf && (
+                      <span className="font-mono opacity-70">
+                        via {n.viaEtf}
+                      </span>
+                    )}
                     <span>·</span>
                     <span>{new Date(n.publishedAt).toLocaleDateString(lc)}</span>
                   </div>

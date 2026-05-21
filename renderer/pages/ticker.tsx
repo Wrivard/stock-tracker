@@ -491,9 +491,22 @@ export default function TickerPage() {
                         <p className="text-sm font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2">
                           {n.headline}
                         </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {n.source} ·{' '}
-                          {new Date(n.publishedAt).toLocaleDateString(lc)}
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                          {/* When the article was surfaced via this
+                              ticker's ETF holdings, show the underlying
+                              symbol so the user knows AAPL news isn't
+                              actually news about XEQT itself. */}
+                          {n.viaEtf && n.symbol !== n.viaEtf && (
+                            <>
+                              <span className="font-mono text-foreground">
+                                {n.symbol}
+                              </span>
+                              <span>·</span>
+                            </>
+                          )}
+                          <span>{n.source}</span>
+                          <span>·</span>
+                          <span>{new Date(n.publishedAt).toLocaleDateString(lc)}</span>
                         </p>
                       </div>
                       <ArrowUpRight className="size-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-1" />

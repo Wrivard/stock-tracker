@@ -42,6 +42,7 @@ interface NewsItemView {
   publishedAt: number
   imageUrl: string | null
   tickerName: string | null
+  viaEtf?: string
 }
 
 const ALL = '__all__'
@@ -98,7 +99,10 @@ export default function NewsPage() {
 
   const filtered = useMemo(() => {
     if (filter === ALL) return items
-    return items.filter((i) => i.symbol === filter)
+    // Match either the direct symbol OR the ETF that surfaced this
+    // article via its holdings. Picking an ETF in the filter shows
+    // ETF-direct news + all "via <ETF>" articles from its holdings.
+    return items.filter((i) => i.symbol === filter || i.viaEtf === filter)
   }, [items, filter])
 
   async function openLink(url: string) {
@@ -283,7 +287,7 @@ export default function NewsPage() {
                   />
                 )}
                 <div className="flex-1 min-w-0 space-y-1.5">
-                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
                     <Link
                       href={{ pathname: '/ticker', query: { symbol: n.symbol } }}
                       onClick={(e) => e.stopPropagation()}
@@ -291,6 +295,24 @@ export default function NewsPage() {
                     >
                       {n.symbol}
                     </Link>
+                    {n.viaEtf && (
+                      // Surface the parent ETF when this article was
+                      // pulled via the ETF's top holdings. Clicking it
+                      // navigates to the ETF's own ticker page.
+                      <>
+                        <span>·</span>
+                        <Link
+                          href={{
+                            pathname: '/ticker',
+                            query: { symbol: n.viaEtf },
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-border bg-muted/30 hover:text-primary hover:border-primary/40 transition-colors"
+                        >
+                          via {n.viaEtf}
+                        </Link>
+                      </>
+                    )}
                     <span>·</span>
                     <span>{n.source}</span>
                     <span>·</span>

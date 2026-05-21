@@ -101,8 +101,10 @@ export async function searchTickers(query: string) {
   )
 }
 
-// News routing: Yahoo first (covers TSX + global), Finnhub as fallback
-// for US tickers when Yahoo returns nothing.
+// News routing: Yahoo first (covers TSX + global), then — if the symbol
+// is an ETF and Yahoo returned nothing meaningful — fall through to the
+// top-holdings news. Finnhub is last-resort for US tickers that Yahoo
+// somehow rate-limits or refuses.
 async function fetchNewsWithFallback(symbol: string): Promise<NewsItem[]> {
   try {
     const yahooNews = await yahoo.fetchNews(symbol)
@@ -110,11 +112,64 @@ async function fetchNewsWithFallback(symbol: string): Promise<NewsItem[]> {
   } catch {
     // fall through
   }
+
+  // ETF fallback. Yahoo's news search consistently returns zero
+  // articles for ETF symbols (the relatedTickers filter we added in
+  // v0.1.13 strips the generic-market noise), so a portfolio with
+  // only ETFs renders an empty News page. Fetch news for the top
+  // holdings instead and annotate each item with viaEtf=<symbol> so
+  // the UI shows "via XEQT" and the filter can match the ETF.
+  const etfNews = await fetchEtfHoldingsNews(symbol)
+  if (etfNews.length > 0) return etfNews
+
   try {
     return await finnhub.fetchNews(symbol)
   } catch {
     return []
   }
+}
+
+// Fetch news for the top 5 cached holdings of an ETF. Returns [] if
+// the ETF details aren't in cache yet (refreshAll populates them) or
+// the holdings are anonymous (cash, currency hedges, etc.). Each
+// returned NewsItem carries viaEtf so the UI can label it. Dedupes by
+// article URL across the holdings before returning so the same Reuters
+// article doesn't appear 5 times when multiple top holdings are
+// mentioned in it.
+async function fetchEtfHoldingsNews(etfSymbol: string): Promise<NewsItem[]> {
+  const cached = getCachedEtfDetails(etfSymbol)
+  if (!cached?.data) return []
+
+  const topHoldings = cached.data.holdings
+    .filter((h) => h.symbol && h.percent > 0)
+    .slice(0, 5)
+  if (topHoldings.length === 0) return []
+
+  const collected: NewsItem[] = []
+  for (const h of topHoldings) {
+    if (!h.symbol) continue
+    try {
+      const news = await yahoo.fetchNews(h.symbol, 3)
+      for (const n of news) {
+        // Keep the underlying ticker in `symbol` so users who own
+        // both the ETF AND the underlying directly can filter both
+        // ways. viaEtf threads the ETF identity through.
+        collected.push({ ...n, viaEtf: etfSymbol })
+      }
+    } catch {
+      // Per-holding failures are non-fatal — keep going.
+    }
+  }
+
+  const seen = new Set<string>()
+  return collected
+    .filter((n) => {
+      if (seen.has(n.url)) return false
+      seen.add(n.url)
+      return true
+    })
+    .sort((a, b) => b.publishedAt - a.publishedAt)
+    .slice(0, 15)
 }
 
 export async function getNews(symbol: string, opts?: { bypass?: boolean }) {
@@ -359,6 +414,20 @@ export async function getPortfolioNews(opts?: {
       errors[h.ticker] = err instanceof Error ? err.message : String(err)
     }
   }
-  items.sort((a, b) => b.publishedAt - a.publishedAt)
-  return { items, errors }
+  // Dedupe by article URL across the whole portfolio. With ETF
+  // holdings-news in v0.1.26, a user who holds both AAPL directly AND
+  // an ETF that holds AAPL would see the same Reuters article twice —
+  // once from news:AAPL and once from news:XEQT (annotated viaEtf).
+  // Keep the first occurrence (whichever ticker we hit first in the
+  // holdings loop) so the de-duped article keeps the most direct
+  // attribution.
+  const seenUrls = new Set<string>()
+  const deduped = items.filter((n) => {
+    if (!n.url) return true
+    if (seenUrls.has(n.url)) return false
+    seenUrls.add(n.url)
+    return true
+  })
+  deduped.sort((a, b) => b.publishedAt - a.publishedAt)
+  return { items: deduped, errors }
 }
