@@ -12,6 +12,7 @@ import type {
 } from './db/types'
 import type {
   CacheStatus,
+  EtfDetails,
   FxRate,
   HistoricalCandle,
   HistoryPeriod,
@@ -133,6 +134,10 @@ const api = {
     search: (query: string) =>
       ipcRenderer.invoke(IPC.market.search, query) as Promise<
         CachedEntry<SymbolSearchResult[]>
+      >,
+    etfDetails: (symbol: string, opts?: { bypass?: boolean }) =>
+      ipcRenderer.invoke(IPC.market.etfDetails, symbol, opts) as Promise<
+        CachedEntry<EtfDetails | null>
       >,
   },
   snapshots: {

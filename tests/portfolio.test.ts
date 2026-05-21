@@ -65,6 +65,34 @@ function setCachedQuote(
   ).run(`quote:${symbol}`, payload, fetchedAt, fetchedAt + 60_000)
 }
 
+function setCachedEtfDetails(
+  symbol: string,
+  sectorWeightings: Record<string, number>,
+  fetchedAt = Date.now(),
+) {
+  const payload = JSON.stringify({
+    symbol,
+    family: 'TestCo',
+    category: null,
+    sectorWeightings,
+    holdings: [],
+    fetchedAt,
+  })
+  db.prepare(
+    `INSERT INTO api_cache (key, payload, fetched_at, expires_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET
+       payload = excluded.payload,
+       fetched_at = excluded.fetched_at,
+       expires_at = excluded.expires_at`,
+  ).run(
+    `etfDetails:${symbol}`,
+    payload,
+    fetchedAt,
+    fetchedAt + 24 * 3600_000,
+  )
+}
+
 describe('portfolio.getPortfolioOverview', () => {
   it('returns zeros when there are no holdings', () => {
     const ov = getPortfolioOverview('CAD')
@@ -207,5 +235,78 @@ describe('portfolio.getPortfolioOverview', () => {
     // buckets it under code 'other'.
     expect(ov.positions[0].sectorCode).toBeNull()
     expect(ov.sectors.some((s) => s.code === 'other')).toBe(true)
+  })
+})
+
+describe('portfolio.getPortfolioOverview — ETF look-through', () => {
+  it('keeps ETFs in their bucket on sectorsRaw and splits them on sectors', () => {
+    // 100 units of an ETF @ $10 = $1000 in the etf bucket
+    createTransaction({
+      ticker: 'XEQT.TO', kind: 'buy', quantity: 100, price: 10,
+      currency: 'CAD', occurredAt: '2025-01-01',
+    })
+    // Assign the ETF to the etf sector
+    const sectors = listSectors()
+    const etfSectorId = sectors.find((s) => s.code === 'etf')!.id
+    setTickerSector('XEQT.TO', etfSectorId, true)
+    setCachedQuote('XEQT.TO', 10)
+    setCachedEtfDetails('XEQT.TO', {
+      tech: 0.4,
+      finance: 0.3,
+      health: 0.2,
+      other: 0.1,
+    })
+    const ov = getPortfolioOverview('CAD')
+    // Naive: 100% etf
+    const rawEtf = ov.sectorsRaw.find((s) => s.code === 'etf')
+    expect(rawEtf?.value).toBeCloseTo(1000, 2)
+    // Look-through: 40% tech, 30% finance, 20% health, 10% other
+    expect(ov.sectors.find((s) => s.code === 'tech')?.value).toBeCloseTo(400, 2)
+    expect(ov.sectors.find((s) => s.code === 'finance')?.value).toBeCloseTo(300, 2)
+    expect(ov.sectors.find((s) => s.code === 'health')?.value).toBeCloseTo(200, 2)
+    expect(ov.sectors.find((s) => s.code === 'other')?.value).toBeCloseTo(100, 2)
+    // No "etf" bucket in the look-through view when fully decomposed
+    expect(ov.sectors.find((s) => s.code === 'etf')).toBeUndefined()
+    expect(ov.lookThroughApplied).toContain('XEQT.TO')
+  })
+
+  it('falls back to the etf bucket when no composition is cached', () => {
+    createTransaction({
+      ticker: 'UNKNOWN-ETF.TO', kind: 'buy', quantity: 10, price: 100,
+      currency: 'CAD', occurredAt: '2025-01-01',
+    })
+    const sectors = listSectors()
+    const etfSectorId = sectors.find((s) => s.code === 'etf')!.id
+    setTickerSector('UNKNOWN-ETF.TO', etfSectorId, true)
+    setCachedQuote('UNKNOWN-ETF.TO', 100)
+    // No setCachedEtfDetails — composition is unknown
+    const ov = getPortfolioOverview('CAD')
+    expect(ov.sectors.find((s) => s.code === 'etf')?.value).toBeCloseTo(1000, 2)
+    expect(ov.lookThroughApplied).toHaveLength(0)
+  })
+
+  it('adds ETF sector contributions on top of direct equity positions', () => {
+    // $1000 in an ETF that's 50% tech
+    createTransaction({
+      ticker: 'VEQ.TO', kind: 'buy', quantity: 10, price: 100,
+      currency: 'CAD', occurredAt: '2025-01-01',
+    })
+    // $500 direct in AAPL (tech)
+    createTransaction({
+      ticker: 'AAPL', kind: 'buy', quantity: 5, price: 100,
+      currency: 'CAD', occurredAt: '2025-01-01',
+    })
+    const sectors = listSectors()
+    setTickerSector('VEQ.TO', sectors.find((s) => s.code === 'etf')!.id, true)
+    setTickerSector('AAPL', sectors.find((s) => s.code === 'tech')!.id, true)
+    setCachedQuote('VEQ.TO', 100)
+    setCachedQuote('AAPL', 100)
+    setCachedEtfDetails('VEQ.TO', { tech: 0.5, finance: 0.5 })
+    const ov = getPortfolioOverview('CAD')
+    const tech = ov.sectors.find((s) => s.code === 'tech')!
+    // 500 (direct) + 500 (look-through from ETF's 50% tech) = 1000
+    expect(tech.value).toBeCloseTo(1000, 2)
+    // 500 of the tech value came from the ETF
+    expect(tech.etfValue).toBeCloseTo(500, 2)
   })
 })

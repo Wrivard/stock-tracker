@@ -205,6 +205,12 @@ export function registerIpcHandlers(): void {
       return market.searchTickers(q)
     }),
   )
+  ipcMain.handle(
+    IPC.market.etfDetails,
+    wrap((symbol: string, opts: unknown) =>
+      market.getEtfDetails(symbol, BypassSchema.parse(opts)),
+    ),
+  )
 
   ipcMain.handle(IPC.snapshots.list, wrap(() => snapshots.listSnapshots()))
   ipcMain.handle(IPC.snapshots.capture, wrap(() => snapshots.captureDailySnapshot()))

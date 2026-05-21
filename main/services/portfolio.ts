@@ -1,6 +1,6 @@
 import { listHoldings } from '../db/repo/holdings'
 import { listSectors } from '../db/repo/sectors'
-import { getCachedQuote } from './market-api'
+import { getCachedEtfDetails, getCachedQuote } from './market-api'
 import { readRaw } from './cache'
 import { getApiKey } from './settings-keys'
 import { getSetting } from '../db/repo/settings'
@@ -39,6 +39,9 @@ export interface PortfolioSectorAllocation {
   color: string | null
   value: number
   percent: number
+  // Portion of `value` that came from ETF look-through (vs. direct
+  // equity holdings). Lets the UI annotate "30% Tech (12% via ETF)".
+  etfValue: number
 }
 
 export interface PortfolioOverview {
@@ -49,7 +52,13 @@ export interface PortfolioOverview {
   totalPnlPct: number
   dayChange: number
   dayChangePct: number
+  // sectors uses look-through: each ETF position's value is split
+  // across its constituent sectors. When an ETF has no cached
+  // composition, its full value falls back to the "etf" bucket.
   sectors: PortfolioSectorAllocation[]
+  // sectorsRaw is the "naive" view: every ETF stays in the "etf"
+  // bucket. Kept around so the UI can offer a toggle.
+  sectorsRaw: PortfolioSectorAllocation[]
   positions: PortfolioPosition[]
   fxUsdToCad: number
   fxFetchedAt: number | null
@@ -57,6 +66,9 @@ export interface PortfolioOverview {
   missingApiKey: { finnhub: boolean; twelvedata: boolean }
   oldestQuoteAge: number | null
   anyStale: boolean
+  // List of ETF symbols whose composition was used in the look-through;
+  // empty means look-through was a no-op (no ETFs / no cached data).
+  lookThroughApplied: string[]
 }
 
 function readDisplayCurrency(): Currency {
@@ -89,7 +101,12 @@ export function getPortfolioOverview(
 
   const holdings = listHoldings()
   const positions: PortfolioPosition[] = []
-  const sectorTotals = new Map<string, number>()
+  // Two parallel ledgers: "raw" keeps ETFs in their own bucket, "look-
+  // through" splits ETF value across the constituent sector weightings.
+  const sectorTotalsRaw = new Map<string, number>()
+  const sectorTotalsLookThrough = new Map<string, number>()
+  const sectorEtfContribution = new Map<string, number>()
+  const lookThroughApplied: string[] = []
   let totalValue = 0
   let totalCost = 0
   let dayChange = 0
@@ -122,7 +139,53 @@ export function getPortfolioOverview(
     dayChange += dayPnl
 
     const sectorCode = h.sectorCode ?? 'other'
-    sectorTotals.set(sectorCode, (sectorTotals.get(sectorCode) ?? 0) + marketValue)
+    sectorTotalsRaw.set(
+      sectorCode,
+      (sectorTotalsRaw.get(sectorCode) ?? 0) + marketValue,
+    )
+
+    // Look-through: if this position is an ETF and we have a cached
+    // sector breakdown, distribute marketValue across the underlying
+    // sectors. Otherwise, fall back to the naive bucket.
+    const isEtf = sectorCode === 'etf'
+    let lookThroughApplied_ = false
+    if (isEtf) {
+      const cached = getCachedEtfDetails(h.ticker)
+      const details = cached?.data ?? null
+      const weightingSum = details
+        ? Object.values(details.sectorWeightings).reduce((a, b) => a + b, 0)
+        : 0
+      if (details && weightingSum > 0) {
+        for (const [code, weight] of Object.entries(details.sectorWeightings)) {
+          const portion = marketValue * weight
+          sectorTotalsLookThrough.set(
+            code,
+            (sectorTotalsLookThrough.get(code) ?? 0) + portion,
+          )
+          sectorEtfContribution.set(
+            code,
+            (sectorEtfContribution.get(code) ?? 0) + portion,
+          )
+        }
+        // Any unclassified slice (Yahoo doesn't categorize cash, etc.)
+        // is bucketed as "other" so the totals still sum to marketValue.
+        const unclassified = marketValue * (1 - weightingSum)
+        if (unclassified > 0.01) {
+          sectorTotalsLookThrough.set(
+            'other',
+            (sectorTotalsLookThrough.get('other') ?? 0) + unclassified,
+          )
+        }
+        lookThroughApplied.push(h.ticker)
+        lookThroughApplied_ = true
+      }
+    }
+    if (!lookThroughApplied_) {
+      sectorTotalsLookThrough.set(
+        sectorCode,
+        (sectorTotalsLookThrough.get(sectorCode) ?? 0) + marketValue,
+      )
+    }
 
     positions.push({
       ticker: h.ticker,
@@ -155,19 +218,28 @@ export function getPortfolioOverview(
   }
   positions.sort((a, b) => b.marketValue - a.marketValue)
 
-  const sectors: PortfolioSectorAllocation[] = []
-  for (const [code, value] of sectorTotals.entries()) {
-    const meta = sectorMap.get(code)
-    sectors.push({
-      code,
-      labelFr: meta?.labelFr ?? code,
-      labelEn: meta?.labelEn ?? code,
-      color: meta?.color ?? null,
-      value,
-      percent: totalValue > 0 ? (value / totalValue) * 100 : 0,
-    })
+  function buildAllocation(
+    totals: Map<string, number>,
+    etfContribution: Map<string, number>,
+  ): PortfolioSectorAllocation[] {
+    const out: PortfolioSectorAllocation[] = []
+    for (const [code, value] of totals.entries()) {
+      const meta = sectorMap.get(code)
+      out.push({
+        code,
+        labelFr: meta?.labelFr ?? code,
+        labelEn: meta?.labelEn ?? code,
+        color: meta?.color ?? null,
+        value,
+        percent: totalValue > 0 ? (value / totalValue) * 100 : 0,
+        etfValue: etfContribution.get(code) ?? 0,
+      })
+    }
+    out.sort((a, b) => b.value - a.value)
+    return out
   }
-  sectors.sort((a, b) => b.value - a.value)
+  const sectors = buildAllocation(sectorTotalsLookThrough, sectorEtfContribution)
+  const sectorsRaw = buildAllocation(sectorTotalsRaw, new Map())
 
   const totalPnl = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
@@ -182,6 +254,8 @@ export function getPortfolioOverview(
     dayChange,
     dayChangePct,
     sectors,
+    sectorsRaw,
+    lookThroughApplied,
     positions,
     fxUsdToCad: usdToCad,
     fxFetchedAt,

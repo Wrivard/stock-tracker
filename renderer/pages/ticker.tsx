@@ -19,6 +19,7 @@ import type {
   TransactionInput,
 } from '../../main/db/types'
 import type {
+  EtfDetails,
   HistoricalCandle,
   HistoryPeriod,
   NewsItem,
@@ -51,6 +52,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { PriceChart } from '@/components/ticker/PriceChart'
+import { EtfDetailsCard } from '@/components/ticker/EtfDetailsCard'
 import { TransactionForm } from '@/components/holdings/TransactionForm'
 
 export default function TickerPage() {
@@ -77,6 +79,7 @@ export default function TickerPage() {
   const [period, setPeriod] = useState<HistoryPeriod>('1Y')
   const [loading, setLoading] = useState(true)
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
+  const [etfDetails, setEtfDetails] = useState<CachedEntry<EtfDetails | null> | null>(null)
 
   const position = useMemo(
     () => overview?.positions.find((p) => p.ticker === symbol) ?? null,
@@ -101,8 +104,9 @@ export default function TickerPage() {
       api().market.news(symbol).catch(() => null),
       api().transactions.list({ ticker: symbol }),
       api().sectors.list(),
+      api().market.etfDetails(symbol).catch(() => null),
     ])
-      .then(([ov, prof, hist, n, txs, secs]) => {
+      .then(([ov, prof, hist, n, txs, secs, etf]) => {
         if (cancelled) return
         setOverview(ov)
         setProfile(prof)
@@ -110,6 +114,7 @@ export default function TickerPage() {
         setNews(n)
         setTransactions(txs)
         setSectors(secs)
+        setEtfDetails(etf)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -399,6 +404,16 @@ export default function TickerPage() {
             sectorMeta={sectorMeta}
           />
         </div>
+
+        {/* ETF look-through: sector composition + top holdings */}
+        {etfDetails?.data && (
+          <EtfDetailsCard
+            details={etfDetails.data}
+            sectors={sectors}
+            fetchedAt={etfDetails.fetchedAt}
+            stale={etfDetails.stale}
+          />
+        )}
 
         {/* News + Transactions side by side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

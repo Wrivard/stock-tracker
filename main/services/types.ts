@@ -50,6 +50,27 @@ export interface HistoricalCandle {
   volume: number
 }
 
+// Yahoo's `topHoldings` module: each ETF returns up to 10 holdings and
+// an aggregated sector breakdown. The sector codes here are OUR internal
+// codes (tech/health/…), already mapped from Yahoo's vocabulary.
+export interface EtfHolding {
+  symbol: string | null
+  name: string
+  percent: number // 0-1 (e.g. 0.2582 == 25.82%)
+}
+
+export interface EtfDetails {
+  symbol: string
+  family: string | null
+  category: string | null
+  // Sector weightings keyed by our sector code (tech/finance/…), values
+  // in 0-1. Sum may be slightly less than 1 — Yahoo doesn't always
+  // categorize everything (e.g. cash holdings).
+  sectorWeightings: Record<string, number>
+  holdings: EtfHolding[]
+  fetchedAt: number
+}
+
 export interface FxRate {
   from: Currency
   to: Currency

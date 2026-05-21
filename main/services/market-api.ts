@@ -11,6 +11,7 @@ import { getApiKey } from './settings-keys'
 import type { Currency } from '../db/types'
 import type {
   CacheStatus,
+  EtfDetails,
   FxRate,
   HistoricalCandle,
   HistoryPeriod,
@@ -27,6 +28,7 @@ const TTL = {
   history: 6 * 3600_000,  // 6 h — daily candles update once/day
   fx: 6 * 3600_000,       // 6 h — daily ECB reference rate
   search: 60 * 60_000,  // 1 h — symbol universe doesn't change often
+  etfDetails: 24 * 3600_000, // 24 h — holdings turn over very slowly
 }
 
 // Quote routing strategy:
@@ -108,13 +110,45 @@ export async function getNews(symbol: string, opts?: { bypass?: boolean }) {
   })
 }
 
+// History routing: Yahoo first (free, covers TSX), Twelve Data as
+// fallback for the rare case where Yahoo doesn't have the symbol or
+// rate-limits us.
+async function fetchHistoryWithFallback(
+  symbol: string,
+  period: HistoryPeriod,
+): Promise<HistoricalCandle[]> {
+  try {
+    const candles = await yahoo.fetchDailyHistory(symbol, period)
+    if (candles.length > 0) return candles
+  } catch {
+    // fall through to Twelve Data
+  }
+  return twelvedata.fetchDailyHistory(symbol, period)
+}
+
 export async function getHistory(symbol: string, period: HistoryPeriod = '1Y') {
   const sym = symbol.toUpperCase()
   return withCache<HistoricalCandle[]>(
     `history:${sym}:${period}`,
-    () => twelvedata.fetchDailyHistory(sym, period),
+    () => fetchHistoryWithFallback(sym, period),
     { ttlMs: TTL.history, staleFallback: true },
   )
+}
+
+// ETF look-through data (sector weightings + top holdings). Cached
+// 24 h since holdings barely change day-to-day. Cache miss returns
+// the underlying error so callers can fall back to "100% ETF sector".
+export async function getEtfDetails(symbol: string, opts?: { bypass?: boolean }) {
+  const sym = symbol.toUpperCase()
+  return withCache<EtfDetails | null>(
+    `etfDetails:${sym}`,
+    () => yahoo.fetchEtfDetails(sym),
+    { ttlMs: TTL.etfDetails, staleFallback: true, bypass: opts?.bypass },
+  )
+}
+
+export function getCachedEtfDetails(symbol: string) {
+  return readRaw<EtfDetails | null>(`etfDetails:${symbol.toUpperCase()}`)
 }
 
 export async function getFxRate(from: Currency, to: Currency) {
@@ -177,6 +211,17 @@ export async function refreshTicker(symbol: string, opts?: { bypass?: boolean })
       // sectorOverride defaults to false; upsert only writes the
       // sector when the existing override flag is 0.
     })
+  }
+
+  // For ETFs, also pull the sector weightings + top holdings so the
+  // portfolio overview can do look-through allocation. Cached for a
+  // full day — the per-refresh cost is one Yahoo call per ETF per day.
+  if (quoteData?.quoteType === 'ETF') {
+    try {
+      await getEtfDetails(sym, opts)
+    } catch {
+      // Look-through enrichment is best-effort.
+    }
   }
 
   return {
