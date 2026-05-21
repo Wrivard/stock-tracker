@@ -214,7 +214,7 @@ export default function TickerPage() {
   return (
     <>
       <Head>
-        <title>{`${symbol} · Portfolio Tracker`}</title>
+        <title>{`${symbol} · Beta Trading Hub`}</title>
       </Head>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         {/* Back link */}

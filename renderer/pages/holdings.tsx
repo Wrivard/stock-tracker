@@ -103,7 +103,7 @@ export default function HoldingsPage() {
   return (
     <>
       <Head>
-        <title>{`${t('holdings.title')} · Portfolio Tracker`}</title>
+        <title>{`${t('holdings.title')} · Beta Trading Hub`}</title>
       </Head>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <header className="flex items-start justify-between gap-4">

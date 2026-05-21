@@ -109,7 +109,7 @@ export default function HomePage() {
   return (
     <>
       <Head>
-        <title>{`${t('nav.dashboard')} · Portfolio Tracker`}</title>
+        <title>{`${t('nav.dashboard')} · Beta Trading Hub`}</title>
       </Head>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         <header className="flex items-start justify-between gap-4">

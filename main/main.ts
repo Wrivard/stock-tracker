@@ -38,7 +38,7 @@ process.on('uncaughtException', (err) => {
   if (isProd && app.isReady()) {
     try {
       dialog.showErrorBox(
-        'Stock Tracker — uncaught exception',
+        'Beta Trading Hub — uncaught exception',
         err instanceof Error ? `${err.message}\n\n${err.stack}` : String(err),
       )
     } catch {
@@ -227,7 +227,7 @@ function bindLocalShortcuts(win: BrowserWindow) {
     if (isProd) {
       try {
         dialog.showErrorBox(
-          'Stock Tracker — startup failed',
+          'Beta Trading Hub — startup failed',
           err instanceof Error ? `${err.message}\n\n${err.stack}` : String(err),
         )
       } catch {

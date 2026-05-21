@@ -1,9 +1,9 @@
-# Portfolio Tracker
+# Beta Trading Hub
 
 Application desktop locale (Nextron / Electron + Next.js) pour suivre et gerer
 un portefeuille d'actions. Toutes les donnees restent sur la machine. Les APIs
-de marche utilisees sont des **free tiers** (Finnhub + Twelve Data) et un
-service FX gratuit sans cle (Frankfurter).
+de marche utilisees sont des **free tiers** (Yahoo Finance + Finnhub + Twelve
+Data) et un service FX gratuit sans cle (Frankfurter).
 
 > Statut : etapes 1 a 8 implementees. Dashboard, holdings live, historique,
 > rebalance, news, settings, build packaged.
@@ -165,16 +165,16 @@ npm run build    # Build packagee via electron-builder (output : dist/)
 ```
 
 Au build, electron-builder produit selon ton OS :
-- Windows : un installeur NSIS (`Portfolio Tracker-<version>-setup.exe`)
+- Windows : un installeur NSIS (`Beta Trading Hub-<version>-setup.exe`)
 - macOS : un dmg
 - Linux : un AppImage
 
 ## Donnees locales
 
 L'app stocke ses donnees dans `app.getPath('userData')`, qui resout :
-- Windows : `%APPDATA%\Portfolio Tracker\portfolio.sqlite`
-- macOS : `~/Library/Application Support/Portfolio Tracker/portfolio.sqlite`
-- Linux : `~/.config/Portfolio Tracker/portfolio.sqlite`
+- Windows : `%APPDATA%\Beta Trading Hub\portfolio.sqlite`
+- macOS : `~/Library/Application Support/Beta Trading Hub/portfolio.sqlite`
+- Linux : `~/.config/Beta Trading Hub/portfolio.sqlite`
 
 En mode dev, le suffixe ` (development)` est ajoute au dossier pour ne pas
 melanger les bases dev et prod.

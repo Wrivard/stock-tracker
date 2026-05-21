@@ -329,7 +329,7 @@ export default function SettingsPage() {
   return (
     <>
       <Head>
-        <title>{`${t('settings.title')} · Portfolio Tracker`}</title>
+        <title>{`${t('settings.title')} · Beta Trading Hub`}</title>
       </Head>
       <div className="p-6 max-w-3xl mx-auto space-y-6">
         <header className="space-y-1">

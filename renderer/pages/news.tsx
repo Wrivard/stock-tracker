@@ -91,7 +91,7 @@ export default function NewsPage() {
   return (
     <>
       <Head>
-        <title>{`${t('news.title')} · Portfolio Tracker`}</title>
+        <title>{`${t('news.title')} · Beta Trading Hub`}</title>
       </Head>
       <div className="p-6 max-w-5xl mx-auto space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-3">

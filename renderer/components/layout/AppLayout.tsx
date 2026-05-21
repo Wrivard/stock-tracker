@@ -8,12 +8,12 @@ import {
   Newspaper,
   Settings as SettingsIcon,
   Target,
-  TrendingUp,
   Wallet,
 } from 'lucide-react'
 
 import type { TransactionInput } from '../../../main/db/types'
 import { AppHeader } from '@/components/layout/AppHeader'
+import { BrandLogo } from '@/components/BrandLogo'
 import { TransactionForm } from '@/components/holdings/TransactionForm'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -124,11 +124,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       <aside className="w-48 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
         <div className="flex items-center gap-2 px-4 py-4">
-          <div className="size-7 rounded-md bg-primary/10 ring-1 ring-primary/20 flex items-center justify-center">
-            <TrendingUp className="size-4 text-primary" />
-          </div>
+          {/* Logo: prefer the bundled PNG (renderer/public/logo.png); fall
+              back to the lucide icon-in-square if the asset is missing
+              so the app still looks intentional pre-icon-drop. */}
+          <BrandLogo size={28} />
           <span className="text-sm font-semibold tracking-tight">
-            Stock Tracker
+            Beta Trading Hub
           </span>
         </div>
         <nav className="flex-1 px-2 pb-2 flex flex-col gap-px">

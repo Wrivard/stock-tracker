@@ -1,5 +1,5 @@
 appId: quebec.kua.stock-tracker
-productName: Portfolio Tracker
+productName: Beta Trading Hub
 copyright: Copyright © 2026 Wrivard
 directories:
   output: dist

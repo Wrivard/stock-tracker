@@ -1,8 +1,8 @@
 {
   "private": true,
   "name": "stock-tracker",
-  "description": "Application desktop locale pour suivre et gerer un portefeuille d'actions",
-  "version": "0.1.5",
+  "description": "Beta Trading Hub - application desktop locale pour suivre et gerer un portefeuille",
+  "version": "0.1.7",
   "author": "Wrivard <wrivard@kua.quebec>",
   "type": "module",
   "main": "app/main.js",

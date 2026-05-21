@@ -149,8 +149,8 @@ const dict: Dict = {
   },
 
   'onboarding.welcome.title': {
-    fr: 'Bienvenue dans Portfolio Tracker',
-    en: 'Welcome to Portfolio Tracker',
+    fr: 'Bienvenue dans Beta Trading Hub',
+    en: 'Welcome to Beta Trading Hub',
   },
   'onboarding.welcome.body': {
     fr: 'App locale, tes donnees restent sur ta machine. 3 etapes rapides pour demarrer.',
