@@ -2,7 +2,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ExternalLink, Newspaper, Sparkles } from 'lucide-react'
+import { ExternalLink, Newspaper, RefreshCw, Sparkles } from 'lucide-react'
 
 import type { NewsRecapResult } from '../../main/services/ai/recap'
 import { api } from '@/lib/api'
@@ -51,6 +51,7 @@ export default function NewsPage() {
   const dataTick = useUi((s) => s.dataTick)
   const initialized = useUi((s) => s.initialized)
   const apiKeyStatus = useUi((s) => s.apiKeyStatus)
+  const bumpRefresh = useUi((s) => s.bumpRefresh)
 
   const [items, setItems] = useState<NewsItemView[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -59,6 +60,7 @@ export default function NewsPage() {
   const [recapBusy, setRecapBusy] = useState(false)
   const [recap, setRecap] = useState<NewsRecapResult | null>(null)
   const [recapOpen, setRecapOpen] = useState(false)
+  const [refreshingFromRecap, setRefreshingFromRecap] = useState(false)
 
   const reload = async () => {
     setLoading(true)
@@ -116,6 +118,26 @@ export default function NewsPage() {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setRecapBusy(false)
+    }
+  }
+
+  // Refresh inside the empty-state Recap dialog. Same code path as the
+  // header button: warm quotes + news, bump tickers so all pages reload,
+  // then retry the recap. Closes the dialog if news appear so the user
+  // sees the populated state instead of the empty one.
+  async function handleRefreshFromRecap() {
+    setRefreshingFromRecap(true)
+    try {
+      await api().market.refreshAll()
+      bumpRefresh()
+      await reload()
+      // Retry the recap automatically with the freshly populated cache.
+      const result = await api().ai.newsRecap(locale, 7)
+      setRecap(result)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRefreshingFromRecap(false)
     }
   }
 
@@ -267,7 +289,7 @@ export default function NewsPage() {
               <Sparkles className="size-4 text-primary" />
               {t('news.recapTitle')}
             </DialogTitle>
-            {recap && (
+            {recap && recap.articleCount > 0 && (
               <DialogDescription>
                 {t('news.recapMeta', {
                   articles: recap.articleCount,
@@ -277,7 +299,40 @@ export default function NewsPage() {
               </DialogDescription>
             )}
           </DialogHeader>
-          {recap && (
+          {recap && recap.articleCount === 0 && (
+            // Empty state. recap.ts already short-circuits without an
+            // OpenAI call when there's nothing to summarize, so we never
+            // burned credits to land here. Offer a one-click refresh so
+            // the user can populate the cache and retry without closing
+            // the dialog.
+            <div className="flex flex-col items-center text-center gap-3 py-6">
+              <div className="size-12 rounded-full bg-muted flex items-center justify-center">
+                <Newspaper className="size-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium">
+                {t('news.recapEmptyTitle')}
+              </p>
+              <p className="text-xs text-muted-foreground max-w-sm">
+                {t('news.recapEmptyBody')}
+              </p>
+              <Button
+                size="sm"
+                onClick={handleRefreshFromRecap}
+                disabled={refreshingFromRecap}
+              >
+                <RefreshCw
+                  className={refreshingFromRecap ? 'animate-spin' : ''}
+                />
+                {refreshingFromRecap
+                  ? t('common.refreshing')
+                  : t('common.refresh')}
+              </Button>
+              <p className="text-[11px] text-muted-foreground/80 max-w-sm pt-2 border-t border-border/40 mt-2">
+                {t('news.recapEtfHint')}
+              </p>
+            </div>
+          )}
+          {recap && recap.articleCount > 0 && (
             <div className="space-y-3 text-sm leading-relaxed">
               {recap.content.split(/\n(?=## )/g).map((block, i) => {
                 const headingMatch = block.match(/^## (.+)\n?/)

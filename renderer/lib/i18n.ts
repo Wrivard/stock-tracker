@@ -167,6 +167,18 @@ const dict: Dict = {
     fr: '{articles} articles · {tickers} tickers · {model}',
     en: '{articles} articles · {tickers} tickers · {model}',
   },
+  'news.recapEmptyTitle': {
+    fr: 'Aucune actualite a resumer',
+    en: 'No news to summarize',
+  },
+  'news.recapEmptyBody': {
+    fr: 'Le cache de news est vide pour la fenetre des 7 derniers jours. Actualise pour charger les news, puis reessaie.',
+    en: 'The news cache is empty for the past 7 days. Refresh to load news, then try again.',
+  },
+  'news.recapEtfHint': {
+    fr: 'Astuce : Yahoo ne fournit pas de news propres aux ETFs (XEQT, VFV, etc.). Le recap est plus utile sur des stocks individuels.',
+    en: 'Tip: Yahoo does not provide ETF-specific news (XEQT, VFV, etc.). The recap shines on individual stocks.',
+  },
 
   'onboarding.welcome.title': {
     fr: 'Bienvenue dans Beta Trading Hub',
