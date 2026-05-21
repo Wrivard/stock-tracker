@@ -8,7 +8,23 @@ import type {
   TickerInput,
   Transaction,
   TransactionInput,
+  Currency,
 } from './db/types'
+import type {
+  CacheStatus,
+  FxRate,
+  HistoricalCandle,
+  HistoryPeriod,
+  NewsItem,
+  Profile,
+  Quote,
+} from './services/types'
+import type { CachedEntry } from './services/cache'
+import type { AnnotatedNewsItem } from './services/market-api'
+import type { PortfolioOverview } from './services/portfolio'
+import type { PortfolioSnapshot } from './services/snapshots'
+
+type ApiProvider = 'finnhub' | 'twelvedata'
 
 const api = {
   sectors: {
@@ -54,6 +70,75 @@ const api = {
     list: () => ipcRenderer.invoke(IPC.settings.list) as Promise<Setting[]>,
     delete: (key: string) =>
       ipcRenderer.invoke(IPC.settings.delete, key) as Promise<void>,
+    apiKeyStatus: () =>
+      ipcRenderer.invoke(IPC.settings.apiKeyStatus) as Promise<{
+        finnhub: boolean
+        twelvedata: boolean
+      }>,
+    setApiKey: (provider: ApiProvider, value: string) =>
+      ipcRenderer.invoke(IPC.settings.setApiKey, provider, value) as Promise<void>,
+  },
+  market: {
+    quote: (symbol: string, opts?: { bypass?: boolean }) =>
+      ipcRenderer.invoke(IPC.market.quote, symbol, opts) as Promise<
+        CachedEntry<Quote>
+      >,
+    profile: (symbol: string, opts?: { bypass?: boolean }) =>
+      ipcRenderer.invoke(IPC.market.profile, symbol, opts) as Promise<
+        CachedEntry<Profile>
+      >,
+    news: (symbol: string, opts?: { bypass?: boolean }) =>
+      ipcRenderer.invoke(IPC.market.news, symbol, opts) as Promise<
+        CachedEntry<NewsItem[]>
+      >,
+    history: (symbol: string, period: HistoryPeriod) =>
+      ipcRenderer.invoke(IPC.market.history, symbol, period) as Promise<
+        CachedEntry<HistoricalCandle[]>
+      >,
+    fxRate: (from: Currency, to: Currency) =>
+      ipcRenderer.invoke(IPC.market.fxRate, from, to) as Promise<
+        CachedEntry<FxRate>
+      >,
+    refreshTicker: (symbol: string, opts?: { bypass?: boolean }) =>
+      ipcRenderer.invoke(IPC.market.refreshTicker, symbol, opts) as Promise<{
+        quote: CachedEntry<Quote> | null
+        quoteError: string | null
+        profile: Profile | null
+        profileError: string | null
+      }>,
+    refreshAll: (opts?: { bypass?: boolean }) =>
+      ipcRenderer.invoke(IPC.market.refreshAll, opts) as Promise<
+        Record<
+          string,
+          {
+            quote: CachedEntry<Quote> | null
+            quoteError: string | null
+            profile: Profile | null
+            profileError: string | null
+          }
+        >
+      >,
+    status: () => ipcRenderer.invoke(IPC.market.status) as Promise<CacheStatus>,
+    invalidateQuotes: () =>
+      ipcRenderer.invoke(IPC.market.invalidateQuotes) as Promise<void>,
+    portfolioNews: () =>
+      ipcRenderer.invoke(IPC.market.portfolioNews) as Promise<{
+        items: AnnotatedNewsItem[]
+        errors: Record<string, string>
+      }>,
+  },
+  snapshots: {
+    list: () => ipcRenderer.invoke(IPC.snapshots.list) as Promise<PortfolioSnapshot[]>,
+    capture: () =>
+      ipcRenderer.invoke(IPC.snapshots.capture) as Promise<PortfolioSnapshot | null>,
+  },
+  portfolio: {
+    overview: (displayCurrency?: Currency) =>
+      ipcRenderer.invoke(IPC.portfolio.overview, displayCurrency) as Promise<PortfolioOverview>,
+  },
+  shell: {
+    openExternal: (url: string) =>
+      ipcRenderer.invoke(IPC.shell.openExternal, url) as Promise<void>,
   },
 }
 

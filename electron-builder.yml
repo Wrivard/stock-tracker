@@ -1,6 +1,6 @@
-appId: com.example.nextron
-productName: My Nextron App
-copyright: Copyright © 2026 Yoshihide Shiono
+appId: quebec.kua.stock-tracker
+productName: Portfolio Tracker
+copyright: Copyright © 2026 Wrivard
 directories:
   output: dist
   buildResources: resources
@@ -9,4 +9,32 @@ files:
     filter:
       - package.json
       - app
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
 publish: null
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: "${productName}-${version}-setup.${ext}"
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.finance
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Finance

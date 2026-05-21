@@ -1,36 +1,33 @@
 import Head from 'next/head'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Trash2 } from 'lucide-react'
+import {
+  Pencil,
+  Plus,
+  Tag,
+  Trash2,
+} from 'lucide-react'
 
 import type {
-  Currency,
-  Holding,
   Transaction,
   TransactionInput,
-  TransactionKind,
 } from '../../main/db/types'
+import type { PortfolioOverview } from '../../main/services/portfolio'
 import { api, useApiResource } from '@/lib/api'
-import { formatMoney, formatNumber, todayIsoDate } from '@/lib/format'
+import { useUi } from '@/lib/store'
+import { useT } from '@/lib/i18n'
+import { formatMoney, formatNumber, formatPercent } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -39,196 +36,250 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-
-interface TxFormState {
-  ticker: string
-  kind: TransactionKind
-  quantity: string
-  price: string
-  currency: Currency
-  fees: string
-  occurredAt: string
-  notes: string
-}
-
-const emptyForm = (): TxFormState => ({
-  ticker: '',
-  kind: 'buy',
-  quantity: '',
-  price: '',
-  currency: 'CAD',
-  fees: '0',
-  occurredAt: todayIsoDate(),
-  notes: '',
-})
+import { SectorPicker } from '@/components/holdings/SectorPicker'
+import { TransactionForm } from '@/components/holdings/TransactionForm'
 
 export default function HoldingsPage() {
-  const {
-    data: holdings,
-    loading,
-    error,
-    refetch,
-  } = useApiResource<Holding[]>(() => api().holdings.list(true), [])
+  const { t, locale } = useT()
+  const displayCurrency = useUi((s) => s.displayCurrency)
+  const refreshTick = useUi((s) => s.refreshTick)
+  const initialized = useUi((s) => s.initialized)
+
+  const [overview, setOverview] = useState<PortfolioOverview | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const reload = async () => {
+    setLoading(true)
+    try {
+      const data = await api().portfolio.overview(displayCurrency)
+      setOverview(data)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!initialized) return
+    void reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayCurrency, refreshTick, initialized])
 
   const [txDialogOpen, setTxDialogOpen] = useState(false)
-  const [form, setForm] = useState<TxFormState>(emptyForm)
-  const [submitting, setSubmitting] = useState(false)
-
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null)
   const [detailTicker, setDetailTicker] = useState<string | null>(null)
+  const [sectorPickerFor, setSectorPickerFor] = useState<{
+    ticker: string
+    sectorId: number | null
+  } | null>(null)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      const input: TransactionInput = {
-        ticker: form.ticker.trim().toUpperCase(),
-        kind: form.kind,
-        quantity: Number(form.quantity),
-        price: Number(form.price),
-        currency: form.currency,
-        fees: form.fees ? Number(form.fees) : 0,
-        occurredAt: form.occurredAt,
-        notes: form.notes || null,
-      }
-      if (!input.ticker || !Number.isFinite(input.quantity) || input.quantity <= 0) {
-        throw new Error('Ticker et quantite sont requis (quantite > 0)')
-      }
-      if (!Number.isFinite(input.price) || input.price < 0) {
-        throw new Error('Prix doit etre un nombre >= 0')
-      }
-      await api().transactions.create(input)
-      toast.success(`Transaction ${input.kind} ajoutee pour ${input.ticker}`)
-      setForm(emptyForm())
-      setTxDialogOpen(false)
-      await refetch()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      toast.error(`Erreur : ${msg}`)
-    } finally {
-      setSubmitting(false)
-    }
+  async function handleCreateTx(input: TransactionInput) {
+    await api().transactions.create(input)
+    toast.success(
+      locale === 'fr'
+        ? `Transaction ${input.kind} ajoutee pour ${input.ticker}`
+        : `${input.kind === 'buy' ? 'Buy' : 'Sell'} added for ${input.ticker}`,
+    )
+    await reload()
+  }
+
+  async function handleUpdateTx(input: TransactionInput) {
+    if (!editingTx) return
+    await api().transactions.update(editingTx.id, input)
+    toast.success(locale === 'fr' ? 'Transaction modifiee' : 'Transaction updated')
+    setEditingTx(null)
+    await reload()
   }
 
   async function handleDeleteTicker(symbol: string) {
     if (
       !confirm(
-        `Supprimer ${symbol} et toutes ses transactions ? Cette action est irreversible.`,
+        locale === 'fr'
+          ? `Supprimer ${symbol} et toutes ses transactions ?`
+          : `Delete ${symbol} and all its transactions?`,
       )
     ) {
       return
     }
     try {
       await api().tickers.delete(symbol)
-      toast.success(`${symbol} supprime`)
-      await refetch()
+      toast.success(
+        locale === 'fr' ? `${symbol} supprime` : `${symbol} deleted`,
+      )
+      await reload()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     }
   }
 
+  const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
+
   return (
     <>
       <Head>
-        <title>Holdings · Portfolio Tracker</title>
+        <title>{t('holdings.title')} · Portfolio Tracker</title>
       </Head>
-      <div className="p-6 space-y-6 max-w-6xl mx-auto">
-        <header className="flex items-center justify-between">
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <header className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Holdings</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Positions courantes, calculees a partir des transactions stockees
-              localement.
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {t('holdings.title')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+              {t('holdings.subtitle')}
             </p>
           </div>
           <Button onClick={() => setTxDialogOpen(true)}>
             <Plus />
-            Ajouter une transaction
+            {t('holdings.addTx')}
           </Button>
         </header>
 
-        {error && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 text-destructive p-4 text-sm">
-            <strong>Erreur :</strong> {error.message}
-          </div>
-        )}
-
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Ticker</TableHead>
-                <TableHead>Nom</TableHead>
-                <TableHead>Secteur</TableHead>
-                <TableHead className="text-right">Quantite</TableHead>
-                <TableHead className="text-right">Cout moyen</TableHead>
-                <TableHead className="text-right">Cout total</TableHead>
-                <TableHead>Devise</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t('holdings.col.ticker')}</TableHead>
+                <TableHead>{t('holdings.col.name')}</TableHead>
+                <TableHead>{t('holdings.col.sector')}</TableHead>
+                <TableHead className="text-right">{t('holdings.col.quantity')}</TableHead>
+                <TableHead className="text-right">{t('holdings.col.avgCost')}</TableHead>
+                <TableHead className="text-right">{t('holdings.col.price')}</TableHead>
+                <TableHead className="text-right">{t('holdings.col.dayChange')}</TableHead>
+                <TableHead className="text-right">{t('holdings.col.marketValue')}</TableHead>
+                <TableHead className="text-right">{t('holdings.col.pnl')}</TableHead>
+                <TableHead className="text-right">{t('holdings.col.weight')}</TableHead>
+                <TableHead className="text-right"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && (
+              {loading && !overview && (
+                <>
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={11}>
+                        <Skeleton className="h-6 w-full" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
+              )}
+              {overview && overview.positions.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={11}
                     className="text-center text-sm text-muted-foreground py-8"
                   >
-                    Chargement…
+                    {t('holdings.empty')}
                   </TableCell>
                 </TableRow>
               )}
-              {!loading && holdings && holdings.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="text-center text-sm text-muted-foreground py-8"
-                  >
-                    Aucun ticker. Clique sur « Ajouter une transaction » pour
-                    commencer.
-                  </TableCell>
-                </TableRow>
-              )}
-              {!loading &&
-                holdings &&
-                holdings.map((h) => (
-                  <TableRow key={h.ticker}>
+              {overview &&
+                overview.positions.map((p) => (
+                  <TableRow key={p.ticker}>
                     <TableCell className="font-mono font-medium">
                       <button
                         type="button"
                         className="hover:underline text-left"
-                        onClick={() => setDetailTicker(h.ticker)}
+                        onClick={() => setDetailTicker(p.ticker)}
                       >
-                        {h.ticker}
+                        {p.ticker}
                       </button>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {h.name ?? '—'}
+                    <TableCell className="text-muted-foreground max-w-[180px] truncate">
+                      {p.name ?? '—'}
                     </TableCell>
                     <TableCell>
-                      {h.sectorCode ? (
-                        <Badge variant="secondary">{h.sectorLabelFr}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">
-                          non assigne
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSectorPickerFor({
+                            ticker: p.ticker,
+                            sectorId: p.sectorId,
+                          })
+                        }
+                        className="flex items-center gap-1"
+                      >
+                        {p.sectorCode ? (
+                          <Badge variant="secondary">
+                            {locale === 'fr' ? p.sectorLabelFr : p.sectorLabelEn}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">
+                            <Tag className="size-3" />
+                            {locale === 'fr' ? 'Assigner' : 'Assign'}
+                          </Badge>
+                        )}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatNumber(p.quantity, lc, 4)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {formatMoney(p.avgCost, p.currency, lc)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {p.currentPrice !== null ? (
+                        <span
+                          className={cn(
+                            p.quoteStale && 'text-muted-foreground italic',
+                          )}
+                          title={
+                            p.quoteStale
+                              ? locale === 'fr'
+                                ? 'Donnees periees'
+                                : 'Stale data'
+                              : undefined
+                          }
+                        >
+                          {formatMoney(p.currentPrice, p.currency, lc)}
                         </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatNumber(h.quantity, 'fr-CA', 4)}
+                      {p.changePercent !== null ? (
+                        <span
+                          className={cn(
+                            p.changePercent > 0 && 'text-emerald-500',
+                            p.changePercent < 0 && 'text-red-500',
+                          )}
+                        >
+                          {p.changePercent >= 0 ? '+' : ''}
+                          {formatPercent(p.changePercent / 100, lc)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatMoney(h.avgCost, h.currency)}
+                      {formatMoney(p.marketValue, overview.displayCurrency, lc)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatMoney(h.totalCost, h.currency)}
+                    <TableCell
+                      className={cn(
+                        'text-right tabular-nums',
+                        p.pnl > 0 && 'text-emerald-500',
+                        p.pnl < 0 && 'text-red-500',
+                      )}
+                    >
+                      {p.pnl >= 0 ? '+' : ''}
+                      {formatMoney(p.pnl, overview.displayCurrency, lc)}
+                      <div className="text-xs opacity-70">
+                        {p.pnlPct >= 0 ? '+' : ''}
+                        {formatPercent(p.pnlPct / 100, lc)}
+                      </div>
                     </TableCell>
-                    <TableCell>{h.currency}</TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {formatNumber(p.weight, lc, 1)}%
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => handleDeleteTicker(h.ticker)}
-                        aria-label={`Supprimer ${h.ticker}`}
+                        onClick={() => handleDeleteTicker(p.ticker)}
+                        aria-label={`Delete ${p.ticker}`}
                       >
                         <Trash2 />
                       </Button>
@@ -240,149 +291,34 @@ export default function HoldingsPage() {
         </div>
       </div>
 
-      <Dialog open={txDialogOpen} onOpenChange={setTxDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form onSubmit={handleSubmit}>
-            <DialogHeader>
-              <DialogTitle>Nouvelle transaction</DialogTitle>
-              <DialogDescription>
-                Achat ou vente. Le ticker est cree automatiquement si inconnu.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="tx-ticker">Ticker</Label>
-                  <Input
-                    id="tx-ticker"
-                    placeholder="AAPL, SHOP.TO"
-                    value={form.ticker}
-                    onChange={(e) =>
-                      setForm({ ...form, ticker: e.target.value.toUpperCase() })
-                    }
-                    autoFocus
-                    required
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="tx-kind">Type</Label>
-                  <Select
-                    value={form.kind}
-                    onValueChange={(v) =>
-                      setForm({ ...form, kind: v as TransactionKind })
-                    }
-                  >
-                    <SelectTrigger id="tx-kind">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="buy">Achat</SelectItem>
-                      <SelectItem value="sell">Vente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+      <TransactionForm
+        open={txDialogOpen}
+        onClose={() => setTxDialogOpen(false)}
+        onSubmit={handleCreateTx}
+      />
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="tx-qty">Quantite</Label>
-                  <Input
-                    id="tx-qty"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={form.quantity}
-                    onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="tx-price">Prix unitaire</Label>
-                  <Input
-                    id="tx-price"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={form.price}
-                    onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="tx-currency">Devise</Label>
-                  <Select
-                    value={form.currency}
-                    onValueChange={(v) =>
-                      setForm({ ...form, currency: v as Currency })
-                    }
-                  >
-                    <SelectTrigger id="tx-currency">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CAD">CAD</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="tx-fees">Frais</Label>
-                  <Input
-                    id="tx-fees"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={form.fees}
-                    onChange={(e) => setForm({ ...form, fees: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="tx-date">Date</Label>
-                <Input
-                  id="tx-date"
-                  type="date"
-                  value={form.occurredAt}
-                  onChange={(e) => setForm({ ...form, occurredAt: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="tx-notes">Notes (optionnel)</Label>
-                <Input
-                  id="tx-notes"
-                  placeholder="…"
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setTxDialogOpen(false)}
-                disabled={submitting}
-              >
-                Annuler
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Enregistrement…' : 'Enregistrer'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <TransactionForm
+        open={!!editingTx}
+        onClose={() => setEditingTx(null)}
+        editing={editingTx}
+        onSubmit={handleUpdateTx}
+      />
 
       <TransactionsDialog
         ticker={detailTicker}
         onClose={() => setDetailTicker(null)}
-        onChanged={refetch}
+        onChanged={reload}
+        onEdit={(tx) => {
+          setDetailTicker(null)
+          setEditingTx(tx)
+        }}
+      />
+
+      <SectorPicker
+        ticker={sectorPickerFor?.ticker ?? null}
+        currentSectorId={sectorPickerFor?.sectorId ?? null}
+        onClose={() => setSectorPickerFor(null)}
+        onChanged={reload}
       />
     </>
   )
@@ -391,20 +327,37 @@ export default function HoldingsPage() {
 interface TransactionsDialogProps {
   ticker: string | null
   onClose: () => void
-  onChanged: () => Promise<void> | void
+  onChanged: () => Promise<void>
+  onEdit: (tx: Transaction) => void
 }
 
-function TransactionsDialog({ ticker, onClose, onChanged }: TransactionsDialogProps) {
+function TransactionsDialog({
+  ticker,
+  onClose,
+  onChanged,
+  onEdit,
+}: TransactionsDialogProps) {
+  const { t, locale } = useT()
+  const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
   const { data: txs, loading, refetch } = useApiResource<Transaction[]>(
     () => (ticker ? api().transactions.list({ ticker }) : Promise.resolve([])),
     [ticker],
   )
 
   async function handleDelete(id: number) {
-    if (!confirm('Supprimer cette transaction ?')) return
+    if (
+      !confirm(
+        locale === 'fr'
+          ? 'Supprimer cette transaction ?'
+          : 'Delete this transaction?',
+      )
+    )
+      return
     try {
       await api().transactions.delete(id)
-      toast.success('Transaction supprimee')
+      toast.success(
+        locale === 'fr' ? 'Transaction supprimee' : 'Transaction deleted',
+      )
       await refetch()
       await onChanged()
     } catch (err) {
@@ -416,9 +369,11 @@ function TransactionsDialog({ ticker, onClose, onChanged }: TransactionsDialogPr
     <Dialog open={!!ticker} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Transactions — {ticker}</DialogTitle>
+          <DialogTitle>{t('tx.titleFor', { ticker: ticker ?? '' })}</DialogTitle>
           <DialogDescription>
-            Historique des achats / ventes pour ce ticker.
+            {locale === 'fr'
+              ? 'Historique des achats / ventes pour ce ticker.'
+              : 'Buy / sell history for this ticker.'}
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-md border max-h-[400px] overflow-auto">
@@ -426,55 +381,63 @@ function TransactionsDialog({ ticker, onClose, onChanged }: TransactionsDialogPr
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Qte</TableHead>
-                <TableHead className="text-right">Prix</TableHead>
-                <TableHead className="text-right">Frais</TableHead>
-                <TableHead>Devise</TableHead>
-                <TableHead></TableHead>
+                <TableHead>{t('tx.fields.kind')}</TableHead>
+                <TableHead className="text-right">{t('tx.fields.quantity')}</TableHead>
+                <TableHead className="text-right">{t('tx.fields.price')}</TableHead>
+                <TableHead className="text-right">{t('tx.fields.fees')}</TableHead>
+                <TableHead>{t('tx.fields.currency')}</TableHead>
+                <TableHead className="text-right"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-4">
-                    Chargement…
+                    {t('common.loading')}
                   </TableCell>
                 </TableRow>
               )}
               {!loading && txs && txs.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
-                    Aucune transaction.
+                    {locale === 'fr' ? 'Aucune transaction.' : 'No transactions.'}
                   </TableCell>
                 </TableRow>
               )}
               {!loading &&
                 txs &&
-                txs.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="tabular-nums">{t.occurredAt}</TableCell>
+                txs.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell className="tabular-nums">{tx.occurredAt}</TableCell>
                     <TableCell>
-                      <Badge variant={t.kind === 'buy' ? 'default' : 'secondary'}>
-                        {t.kind === 'buy' ? 'Achat' : 'Vente'}
+                      <Badge variant={tx.kind === 'buy' ? 'default' : 'secondary'}>
+                        {tx.kind === 'buy' ? t('tx.fields.buy') : t('tx.fields.sell')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatNumber(t.quantity, 'fr-CA', 4)}
+                      {formatNumber(tx.quantity, lc, 4)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatMoney(t.price, t.currency)}
+                      {formatMoney(tx.price, tx.currency, lc)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatMoney(t.fees, t.currency)}
+                      {formatMoney(tx.fees, tx.currency, lc)}
                     </TableCell>
-                    <TableCell>{t.currency}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell>{tx.currency}</TableCell>
+                    <TableCell className="text-right space-x-1">
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => handleDelete(t.id)}
-                        aria-label="Supprimer"
+                        onClick={() => onEdit(tx)}
+                        aria-label="Edit"
+                      >
+                        <Pencil />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleDelete(tx.id)}
+                        aria-label="Delete"
                       >
                         <Trash2 />
                       </Button>

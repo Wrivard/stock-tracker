@@ -1,4 +1,4 @@
-import { ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 
 import { IPC } from './channels'
@@ -7,9 +7,15 @@ import * as sectorsRepo from '../db/repo/sectors'
 import * as settingsRepo from '../db/repo/settings'
 import * as tickersRepo from '../db/repo/tickers'
 import * as txRepo from '../db/repo/transactions'
+import * as market from '../services/market-api'
+import * as portfolio from '../services/portfolio'
+import * as snapshots from '../services/snapshots'
+import { getApiKey, setApiKey } from '../services/settings-keys'
 
 const Currency = z.enum(['USD', 'CAD'])
 const Kind = z.enum(['buy', 'sell'])
+const Period = z.enum(['1M', '3M', '6M', '1Y', 'ALL'])
+const ApiProvider = z.enum(['finnhub', 'twelvedata'])
 
 const TickerInputSchema = z.object({
   symbol: z.string().min(1).max(20),
@@ -32,6 +38,7 @@ const TransactionInputSchema = z.object({
 })
 
 const TxFilterSchema = z.object({ ticker: z.string().optional() }).optional()
+const BypassSchema = z.object({ bypass: z.boolean().optional() }).optional()
 
 type AnyHandler = (...args: never[]) => unknown
 
@@ -100,4 +107,86 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.settings.delete, wrap((key: string) => settingsRepo.deleteSetting(key)))
   ipcMain.handle(IPC.settings.list, wrap(() => settingsRepo.listSettings()))
+  ipcMain.handle(
+    IPC.settings.apiKeyStatus,
+    wrap(() => ({
+      finnhub: !!getApiKey('finnhub'),
+      twelvedata: !!getApiKey('twelvedata'),
+    })),
+  )
+  ipcMain.handle(
+    IPC.settings.setApiKey,
+    wrap((provider: unknown, value: string) => {
+      setApiKey(ApiProvider.parse(provider), value)
+    }),
+  )
+
+  ipcMain.handle(
+    IPC.market.quote,
+    wrap((symbol: string, opts: unknown) =>
+      market.getQuote(symbol, BypassSchema.parse(opts)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.market.profile,
+    wrap((symbol: string, opts: unknown) =>
+      market.getProfile(symbol, BypassSchema.parse(opts)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.market.news,
+    wrap((symbol: string, opts: unknown) =>
+      market.getNews(symbol, BypassSchema.parse(opts)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.market.history,
+    wrap((symbol: string, period: unknown) =>
+      market.getHistory(symbol, Period.parse(period ?? '1Y')),
+    ),
+  )
+  ipcMain.handle(
+    IPC.market.fxRate,
+    wrap((from: unknown, to: unknown) =>
+      market.getFxRate(Currency.parse(from), Currency.parse(to)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.market.refreshTicker,
+    wrap((symbol: string, opts: unknown) =>
+      market.refreshTicker(symbol, BypassSchema.parse(opts)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.market.refreshAll,
+    wrap((opts: unknown) => market.refreshAll(BypassSchema.parse(opts))),
+  )
+  ipcMain.handle(IPC.market.status, wrap(() => market.getCacheStatus()))
+  ipcMain.handle(
+    IPC.market.invalidateQuotes,
+    wrap(() => market.invalidateAllQuotes()),
+  )
+  ipcMain.handle(
+    IPC.market.portfolioNews,
+    wrap(() => market.getPortfolioNews()),
+  )
+
+  ipcMain.handle(IPC.snapshots.list, wrap(() => snapshots.listSnapshots()))
+  ipcMain.handle(IPC.snapshots.capture, wrap(() => snapshots.captureDailySnapshot()))
+
+  ipcMain.handle(
+    IPC.portfolio.overview,
+    wrap((displayCurrency: unknown) => {
+      const cur = Currency.optional().parse(displayCurrency)
+      return portfolio.getPortfolioOverview(cur)
+    }),
+  )
+
+  ipcMain.handle(
+    IPC.shell.openExternal,
+    wrap(async (url: string) => {
+      const safe = z.string().url().startsWith('http').parse(url)
+      await shell.openExternal(safe)
+    }),
+  )
 }

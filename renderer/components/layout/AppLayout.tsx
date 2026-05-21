@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import {
   LayoutDashboard,
   LineChart,
@@ -11,26 +11,43 @@ import {
   Wallet,
 } from 'lucide-react'
 
+import { AppHeader } from '@/components/layout/AppHeader'
 import { cn } from '@/lib/utils'
+import { useAutoRefresh } from '@/lib/hooks'
+import { useT } from '@/lib/i18n'
+import { useUi } from '@/lib/store'
+import type { TKey } from '@/lib/i18n'
 
 interface NavItem {
   href: string
-  label: string
+  labelKey: TKey
   icon: typeof LayoutDashboard
 }
 
 const NAV: NavItem[] = [
-  { href: '/home', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/holdings', label: 'Holdings', icon: Wallet },
-  { href: '/history', label: 'Historique', icon: LineChart },
-  { href: '/rebalance', label: 'Rebalance', icon: Target },
-  { href: '/news', label: 'News', icon: Newspaper },
-  { href: '/settings', label: 'Settings', icon: SettingsIcon },
+  { href: '/home', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { href: '/holdings', labelKey: 'nav.holdings', icon: Wallet },
+  { href: '/history', labelKey: 'nav.history', icon: LineChart },
+  { href: '/rebalance', labelKey: 'nav.rebalance', icon: Target },
+  { href: '/news', labelKey: 'nav.news', icon: Newspaper },
+  { href: '/settings', labelKey: 'nav.settings', icon: SettingsIcon },
 ]
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter()
   const active = router.pathname
+  const { t } = useT()
+  const initialized = useUi((s) => s.initialized)
+  const loadFromBackend = useUi((s) => s.loadFromBackend)
+
+  // Hydrate UI store from backend settings on first mount. Runs once.
+  useEffect(() => {
+    if (initialized) return
+    if (typeof window === 'undefined' || !window.api) return
+    void loadFromBackend()
+  }, [initialized, loadFromBackend])
+
+  useAutoRefresh()
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -55,7 +72,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 )}
               >
                 <item.icon className="size-4" />
-                {item.label}
+                {t(item.labelKey)}
               </Link>
             )
           })}
@@ -64,7 +81,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
           v0.1.0 — local-only
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <AppHeader />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   )
 }

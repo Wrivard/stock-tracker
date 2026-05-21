@@ -23,5 +23,29 @@ export const IPC = {
     set: 'settings:set',
     list: 'settings:list',
     delete: 'settings:delete',
+    apiKeyStatus: 'settings:apiKeyStatus',
+    setApiKey: 'settings:setApiKey',
+  },
+  market: {
+    quote: 'market:quote',
+    profile: 'market:profile',
+    news: 'market:news',
+    history: 'market:history',
+    fxRate: 'market:fxRate',
+    refreshTicker: 'market:refreshTicker',
+    refreshAll: 'market:refreshAll',
+    status: 'market:status',
+    invalidateQuotes: 'market:invalidateQuotes',
+    portfolioNews: 'market:portfolioNews',
+  },
+  snapshots: {
+    list: 'snapshots:list',
+    capture: 'snapshots:capture',
+  },
+  portfolio: {
+    overview: 'portfolio:overview',
+  },
+  shell: {
+    openExternal: 'shell:openExternal',
   },
 } as const
