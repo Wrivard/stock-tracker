@@ -35,9 +35,11 @@ import {
 } from '@/components/ui/table'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { PortfolioPerformanceChart } from '@/components/dashboard/PortfolioPerformanceChart'
-import type { Transaction } from '../../main/db/types'
+import type { Account, Transaction } from '../../main/db/types'
 
 const ALL_TICKERS = '__all__'
+const ALL_ACCOUNTS = '__all__'
+const UNASSIGNED = '__unassigned__'
 
 export default function HistoryPage() {
   const { t, locale } = useT()
@@ -46,20 +48,24 @@ export default function HistoryPage() {
   const initialized = useUi((s) => s.initialized)
 
   const [txs, setTxs] = useState<Transaction[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [snapshotsCount, setSnapshotsCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [capturing, setCapturing] = useState(false)
   const [tickerFilter, setTickerFilter] = useState<string>(ALL_TICKERS)
+  const [accountFilter, setAccountFilter] = useState<string>(ALL_ACCOUNTS)
 
   const reload = async () => {
     setLoading(true)
     try {
-      const [txList, snaps] = await Promise.all([
+      const [txList, snaps, accs] = await Promise.all([
         api().transactions.list(),
         api().snapshots.list(),
+        api().accounts.list(),
       ])
       setTxs(txList)
       setSnapshotsCount(snaps.length)
+      setAccounts(accs)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
@@ -107,9 +113,25 @@ export default function HistoryPage() {
   }, [txs])
 
   const filteredTxs = useMemo(() => {
-    if (tickerFilter === ALL_TICKERS) return txs
-    return txs.filter((tx) => tx.ticker === tickerFilter)
-  }, [txs, tickerFilter])
+    let out = txs
+    if (tickerFilter !== ALL_TICKERS) {
+      out = out.filter((tx) => tx.ticker === tickerFilter)
+    }
+    if (accountFilter === UNASSIGNED) {
+      out = out.filter((tx) => tx.accountId === null)
+    } else if (accountFilter !== ALL_ACCOUNTS) {
+      const id = Number(accountFilter)
+      out = out.filter((tx) => tx.accountId === id)
+    }
+    return out
+  }, [txs, tickerFilter, accountFilter])
+
+  // accountId -> account row, for rendering account chips on each row.
+  const accountById = useMemo(() => {
+    const m = new Map<number, Account>()
+    for (const a of accounts) m.set(a.id, a)
+    return m
+  }, [accounts])
 
   async function handleCapture() {
     setCapturing(true)
@@ -251,17 +273,41 @@ export default function HistoryPage() {
                         : `${filteredTxs.length} row(s) for ${tickerFilter}`}
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <ListFilter
                   className="size-3.5 text-muted-foreground"
                   aria-hidden
                 />
+                {accounts.length > 0 && (
+                  <Select
+                    key={accountFilter}
+                    value={accountFilter}
+                    onValueChange={setAccountFilter}
+                  >
+                    <SelectTrigger className="w-[160px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_ACCOUNTS}>
+                        {t('accounts.filter.all')}
+                      </SelectItem>
+                      <SelectItem value={UNASSIGNED}>
+                        {t('accounts.filter.unassigned')}
+                      </SelectItem>
+                      {accounts.map((a) => (
+                        <SelectItem key={a.id} value={String(a.id)}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Select
                   key={tickerFilter}
                   value={tickerFilter}
                   onValueChange={setTickerFilter}
                 >
-                  <SelectTrigger className="w-[180px] h-8 text-xs">
+                  <SelectTrigger className="w-[160px] h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -287,6 +333,11 @@ export default function HistoryPage() {
                   </TableHead>
                   <TableHead>{locale === 'fr' ? 'Type' : 'Kind'}</TableHead>
                   <TableHead>{locale === 'fr' ? 'Ticker' : 'Ticker'}</TableHead>
+                  {accounts.length > 0 && (
+                    <TableHead>
+                      {locale === 'fr' ? 'Compte' : 'Account'}
+                    </TableHead>
+                  )}
                   <TableHead className="text-right">
                     {locale === 'fr' ? 'Quantite' : 'Quantity'}
                   </TableHead>
@@ -305,7 +356,7 @@ export default function HistoryPage() {
                 {loading && (
                   <TableRow className="hover:bg-transparent">
                     <TableCell
-                      colSpan={7}
+                      colSpan={accounts.length > 0 ? 8 : 7}
                       className="text-center text-sm text-muted-foreground py-10"
                     >
                       …
@@ -315,7 +366,7 @@ export default function HistoryPage() {
                 {!loading && filteredTxs.length === 0 && (
                   <TableRow className="hover:bg-transparent">
                     <TableCell
-                      colSpan={7}
+                      colSpan={accounts.length > 0 ? 8 : 7}
                       className="text-center text-sm text-muted-foreground py-10"
                     >
                       {locale === 'fr'
@@ -355,6 +406,17 @@ export default function HistoryPage() {
                                 : 'Sell'}
                           </Badge>
                         </TableCell>
+                        {accounts.length > 0 && (
+                          <TableCell className="text-xs">
+                            {tx.accountId !== null && accountById.has(tx.accountId) ? (
+                              <Badge variant="secondary" className="text-[10px] h-5">
+                                {accountById.get(tx.accountId)!.name}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell className="font-mono font-medium">
                           <Link
                             href={{

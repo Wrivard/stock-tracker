@@ -5,6 +5,7 @@ type Dict = Record<string, { fr: string; en: string }>
 const dict: Dict = {
   'nav.dashboard': { fr: 'Tableau de bord', en: 'Dashboard' },
   'nav.holdings': { fr: 'Holdings', en: 'Holdings' },
+  'nav.accounts': { fr: 'Comptes', en: 'Accounts' },
   'nav.history': { fr: 'Historique', en: 'History' },
   'nav.rebalance': { fr: 'Reequilibrage', en: 'Rebalance' },
   'nav.news': { fr: 'Actualites', en: 'News' },
@@ -212,6 +213,42 @@ const dict: Dict = {
     fr: 'L\'app est configuree. Clique sur Actualiser dans le header pour charger les cotations.',
     en: 'The app is configured. Click Refresh in the header to load quotes.',
   },
+  'accounts.title': { fr: 'Comptes', en: 'Accounts' },
+  'accounts.subtitle': {
+    fr: "Gere tes comptes (TFSA, RRSP, FHSA, taxable...). L'import Questrade y associe automatiquement chaque transaction.",
+    en: 'Manage your accounts (TFSA, RRSP, FHSA, taxable...). The Questrade importer auto-links each transaction.',
+  },
+  'accounts.empty': {
+    fr: "Aucun compte enregistre. Importe un fichier Questrade ou cree un compte manuellement.",
+    en: 'No accounts yet. Import a Questrade file or create one manually.',
+  },
+  'accounts.add': { fr: 'Nouveau compte', en: 'New account' },
+  'accounts.edit': { fr: 'Modifier le compte', en: 'Edit account' },
+  'accounts.delete': { fr: 'Supprimer', en: 'Delete' },
+  'accounts.deleteConfirm': {
+    fr: "Supprimer ce compte ? Les transactions deviennent 'sans compte', elles ne sont PAS effacees.",
+    en: "Delete this account? Its transactions become 'unassigned' but are NOT deleted.",
+  },
+  'accounts.fields.name': { fr: 'Nom', en: 'Name' },
+  'accounts.fields.kind': { fr: 'Type', en: 'Kind' },
+  'accounts.fields.brokerNumber': {
+    fr: 'Numero de compte broker (optionnel)',
+    en: 'Broker account number (optional)',
+  },
+  'accounts.fields.defaultCurrency': {
+    fr: 'Devise par defaut',
+    en: 'Default currency',
+  },
+  'accounts.filter.all': { fr: 'Tous les comptes', en: 'All accounts' },
+  'accounts.filter.unassigned': { fr: 'Sans compte', en: 'Unassigned' },
+  'accounts.kind.tfsa': { fr: 'CELI / TFSA', en: 'TFSA' },
+  'accounts.kind.rrsp': { fr: 'REER / RRSP', en: 'RRSP' },
+  'accounts.kind.fhsa': { fr: 'CELIAPP / FHSA', en: 'FHSA' },
+  'accounts.kind.lira': { fr: 'CRI / LIRA', en: 'LIRA' },
+  'accounts.kind.resp': { fr: 'REEE / RESP', en: 'RESP' },
+  'accounts.kind.taxable': { fr: 'Non-enregistre', en: 'Taxable' },
+  'accounts.kind.other': { fr: 'Autre', en: 'Other' },
+
   'history.title': { fr: 'Historique', en: 'History' },
   'history.empty': {
     fr: 'Aucun snapshot pour l\'instant. Le premier sera enregistre des qu\'un prix sera disponible.',

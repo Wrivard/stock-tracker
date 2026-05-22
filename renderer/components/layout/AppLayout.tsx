@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import {
+  Briefcase,
   LayoutDashboard,
   LineChart,
   Newspaper,
@@ -31,6 +32,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/home', labelKey: 'nav.dashboard', icon: LayoutDashboard },
   { href: '/holdings', labelKey: 'nav.holdings', icon: Wallet },
+  { href: '/accounts', labelKey: 'nav.accounts', icon: Briefcase },
   { href: '/history', labelKey: 'nav.history', icon: LineChart },
   { href: '/rebalance', labelKey: 'nav.rebalance', icon: Target },
   { href: '/news', labelKey: 'nav.news', icon: Newspaper },

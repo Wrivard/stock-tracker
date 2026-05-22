@@ -80,6 +80,40 @@ const MIGRATIONS: Migration[] = [
         ON api_cache(expires_at);
     `,
   },
+  {
+    // v3 — multi-account support. Canadian users juggle TFSA, RRSP,
+    // FHSA, taxable cash accounts that have totally different tax
+    // treatments. The Questrade XLSX already exposes Account # +
+    // Account Type per row; we were merging them all and throwing
+    // that signal away. New `accounts` table + nullable account_id
+    // FK on transactions: existing rows stay account_id=NULL (the
+    // "uncategorized" bucket), new rows from Questrade import or
+    // the UI can pick an account.
+    //
+    // Kind = enum string we control on the app side. Broker number
+    // is the raw "Account #" from Questrade so we can de-dupe on
+    // re-import.
+    version: 3,
+    up: `
+      CREATE TABLE accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN (
+          'tfsa','rrsp','fhsa','lira','resp','taxable','other'
+        )),
+        broker_account_number TEXT,
+        default_currency TEXT CHECK (default_currency IN ('USD','CAD')),
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (broker_account_number)
+      );
+
+      ALTER TABLE transactions
+        ADD COLUMN account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;
+
+      CREATE INDEX idx_transactions_account ON transactions(account_id);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

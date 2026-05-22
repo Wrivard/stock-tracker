@@ -29,6 +29,32 @@ export interface TickerInput {
   sectorOverride?: boolean
 }
 
+export type AccountKind =
+  | 'tfsa'
+  | 'rrsp'
+  | 'fhsa'
+  | 'lira'
+  | 'resp'
+  | 'taxable'
+  | 'other'
+
+export interface Account {
+  id: number
+  name: string
+  kind: AccountKind
+  brokerAccountNumber: string | null
+  defaultCurrency: Currency | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AccountInput {
+  name: string
+  kind: AccountKind
+  brokerAccountNumber?: string | null
+  defaultCurrency?: Currency | null
+}
+
 export interface Transaction {
   id: number
   ticker: string
@@ -39,6 +65,10 @@ export interface Transaction {
   fees: number
   notes: string | null
   occurredAt: string
+  // null = "uncategorized" — existing transactions before the v3
+  // migration land here, as do manually-entered transactions without
+  // an explicit account choice.
+  accountId: number | null
   createdAt: number
   updatedAt: number
 }
@@ -52,6 +82,7 @@ export interface TransactionInput {
   fees?: number
   notes?: string | null
   occurredAt: string
+  accountId?: number | null
 }
 
 export interface Holding {

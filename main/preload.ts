@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from './ipc/channels'
 import type {
+  Account,
+  AccountInput,
   Holding,
   Sector,
   Setting,
@@ -56,7 +58,7 @@ const api = {
       ) as Promise<void>,
   },
   transactions: {
-    list: (filter?: { ticker?: string }) =>
+    list: (filter?: { ticker?: string; accountId?: number | null }) =>
       ipcRenderer.invoke(IPC.transactions.list, filter) as Promise<Transaction[]>,
     create: (input: TransactionInput) =>
       ipcRenderer.invoke(IPC.transactions.create, input) as Promise<Transaction>,
@@ -70,6 +72,16 @@ const api = {
   holdings: {
     list: (includeEmpty?: boolean) =>
       ipcRenderer.invoke(IPC.holdings.list, includeEmpty) as Promise<Holding[]>,
+  },
+  accounts: {
+    list: () =>
+      ipcRenderer.invoke(IPC.accounts.list) as Promise<Account[]>,
+    create: (input: AccountInput) =>
+      ipcRenderer.invoke(IPC.accounts.create, input) as Promise<Account>,
+    update: (id: number, input: Partial<AccountInput>) =>
+      ipcRenderer.invoke(IPC.accounts.update, id, input) as Promise<Account | null>,
+    delete: (id: number) =>
+      ipcRenderer.invoke(IPC.accounts.delete, id) as Promise<void>,
   },
   settings: {
     get: (key: string) =>

@@ -12,6 +12,7 @@ import { z } from 'zod'
 const { autoUpdater } = electronUpdaterPkg
 
 import { IPC } from './channels'
+import * as accountsRepo from '../db/repo/accounts'
 import * as holdingsRepo from '../db/repo/holdings'
 import * as sectorsRepo from '../db/repo/sectors'
 import * as settingsRepo from '../db/repo/settings'
@@ -32,6 +33,21 @@ const Period = z.enum(['1M', '3M', '6M', '1Y', 'ALL'])
 const ApiProvider = z.enum(['finnhub', 'twelvedata', 'openai'])
 const Locale = z.enum(['fr', 'en'])
 const TimeSeriesPeriod = z.enum(['day', 'week', 'month', 'year', 'all'])
+const AccountKind = z.enum([
+  'tfsa',
+  'rrsp',
+  'fhsa',
+  'lira',
+  'resp',
+  'taxable',
+  'other',
+])
+const AccountInputSchema = z.object({
+  name: z.string().min(1).max(80),
+  kind: AccountKind,
+  brokerAccountNumber: z.string().max(40).nullable().optional(),
+  defaultCurrency: Currency.nullable().optional(),
+})
 
 const TickerInputSchema = z.object({
   symbol: z.string().min(1).max(20),
@@ -51,9 +67,15 @@ const TransactionInputSchema = z.object({
   fees: z.number().nonnegative().optional(),
   notes: z.string().max(500).nullable().optional(),
   occurredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  accountId: z.number().int().positive().nullable().optional(),
 })
 
-const TxFilterSchema = z.object({ ticker: z.string().optional() }).optional()
+const TxFilterSchema = z
+  .object({
+    ticker: z.string().optional(),
+    accountId: z.number().int().positive().nullable().optional(),
+  })
+  .optional()
 const BypassSchema = z.object({ bypass: z.boolean().optional() }).optional()
 
 type AnyHandler = (...args: never[]) => unknown
@@ -149,6 +171,29 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.holdings.list,
     wrap((includeEmpty?: boolean) => holdingsRepo.listHoldings(includeEmpty)),
+  )
+
+  ipcMain.handle(IPC.accounts.list, wrap(() => accountsRepo.listAccounts()))
+  ipcMain.handle(
+    IPC.accounts.create,
+    wrap((input: unknown) =>
+      accountsRepo.createAccount(AccountInputSchema.parse(input)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.accounts.update,
+    wrap((id: number, input: unknown) =>
+      accountsRepo.updateAccount(
+        z.number().int().positive().parse(id),
+        AccountInputSchema.partial().parse(input),
+      ),
+    ),
+  )
+  ipcMain.handle(
+    IPC.accounts.delete,
+    wrap((id: number) =>
+      accountsRepo.deleteAccount(z.number().int().positive().parse(id)),
+    ),
   )
 
   ipcMain.handle(IPC.settings.get, wrap((key: string) => settingsRepo.getSetting(key)))

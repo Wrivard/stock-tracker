@@ -17,6 +17,7 @@ interface TransactionRow {
   fees: number
   notes: string | null
   occurred_at: string
+  account_id: number | null
   created_at: number
   updated_at: number
 }
@@ -31,6 +32,7 @@ const rowToTransaction = (r: TransactionRow): Transaction => ({
   fees: r.fees,
   notes: r.notes,
   occurredAt: r.occurred_at,
+  accountId: r.account_id,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -48,9 +50,9 @@ export function createTransaction(input: TransactionInput): Transaction {
   const result = getDb()
     .prepare(
       `INSERT INTO transactions
-         (ticker, kind, quantity, price, currency, fees, notes, occurred_at, created_at, updated_at)
+         (ticker, kind, quantity, price, currency, fees, notes, occurred_at, account_id, created_at, updated_at)
        VALUES
-         (@ticker, @kind, @quantity, @price, @currency, @fees, @notes, @occurredAt, @createdAt, @updatedAt)`,
+         (@ticker, @kind, @quantity, @price, @currency, @fees, @notes, @occurredAt, @accountId, @createdAt, @updatedAt)`,
     )
     .run({
       ticker: symbol,
@@ -61,6 +63,7 @@ export function createTransaction(input: TransactionInput): Transaction {
       fees: input.fees ?? 0,
       notes: input.notes ?? null,
       occurredAt: input.occurredAt,
+      accountId: input.accountId ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -75,13 +78,26 @@ export function getTransactionById(id: number): Transaction | null {
   return row ? rowToTransaction(row) : null
 }
 
-export function listTransactions(filter?: { ticker?: string }): Transaction[] {
-  let sql = 'SELECT * FROM transactions'
+export function listTransactions(filter?: {
+  ticker?: string
+  accountId?: number | null
+}): Transaction[] {
+  const where: string[] = []
   const params: unknown[] = []
   if (filter?.ticker) {
-    sql += ' WHERE ticker = ?'
+    where.push('ticker = ?')
     params.push(filter.ticker.toUpperCase())
   }
+  if (filter?.accountId !== undefined) {
+    if (filter.accountId === null) {
+      where.push('account_id IS NULL')
+    } else {
+      where.push('account_id = ?')
+      params.push(filter.accountId)
+    }
+  }
+  let sql = 'SELECT * FROM transactions'
+  if (where.length > 0) sql += ' WHERE ' + where.join(' AND ')
   sql += ' ORDER BY occurred_at DESC, id DESC'
   const rows = getDb().prepare(sql).all(...params) as TransactionRow[]
   return rows.map(rowToTransaction)
@@ -100,7 +116,7 @@ export function updateTransaction(
   getDb()
     .prepare(
       `UPDATE transactions
-       SET kind = ?, quantity = ?, price = ?, currency = ?, fees = ?, notes = ?, occurred_at = ?, updated_at = ?
+       SET kind = ?, quantity = ?, price = ?, currency = ?, fees = ?, notes = ?, occurred_at = ?, account_id = ?, updated_at = ?
        WHERE id = ?`,
     )
     .run(
@@ -111,6 +127,7 @@ export function updateTransaction(
       merged.fees,
       merged.notes,
       merged.occurredAt,
+      merged.accountId,
       now,
       id,
     )

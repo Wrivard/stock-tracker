@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import * as XLSX from 'xlsx'
 
 import { getDb } from '../db/connection'
+import { ensureAccountFromQuestrade } from '../db/repo/accounts'
 import { createTransaction } from '../db/repo/transactions'
 import type { Currency, TransactionInput } from '../db/types'
 
@@ -59,6 +60,10 @@ function parseDate(d: unknown): string | null {
 interface ParsedRow {
   input: TransactionInput
   accountLabel: string
+  // Raw Questrade fields we need to bind to an account_id during the
+  // insert pass — the actual id is resolved inside the SQL transaction.
+  accountTypeRaw: string
+  accountNumberRaw: string
 }
 
 function rowToTransaction(row: RawRow): ParsedRow | { error: string } {
@@ -95,6 +100,8 @@ function rowToTransaction(row: RawRow): ParsedRow | { error: string } {
 
   return {
     accountLabel,
+    accountTypeRaw: accountType,
+    accountNumberRaw: accountNo,
     input: {
       ticker: symbol,
       kind: action === 'Buy' ? 'buy' : 'sell',
@@ -104,6 +111,10 @@ function rowToTransaction(row: RawRow): ParsedRow | { error: string } {
       fees,
       notes: note,
       occurredAt,
+      // accountId is filled in during the SQL transaction below
+      // because ensureAccountFromQuestrade may need to INSERT a new
+      // accounts row first.
+      accountId: null,
     },
   }
 }
@@ -150,17 +161,40 @@ export function importQuestradeXlsx(filePath: string): ImportSummary {
       .all() as Array<{ symbol: string }>).map((r) => r.symbol),
   )
 
+  // Memo for find-or-create-account per broker-account-number inside
+  // the SQL transaction. We can't hoist the lookups outside the
+  // transaction because new accounts get inserted here and need to
+  // be readable on the next iteration.
+  const accountByBrokerNumber = new Map<string, number>()
   const insertAll = getDb().transaction((parsedRows: ParsedRow[]) => {
-    for (const { input, accountLabel } of parsedRows) {
-      createTransaction(input)
-      summary.byAccount[accountLabel] =
-        (summary.byAccount[accountLabel] ?? 0) + 1
-      summary.imported++
-      if (!existingTickers.has(input.ticker)) {
-        if (!summary.newTickers.includes(input.ticker)) {
-          summary.newTickers.push(input.ticker)
+    for (const row of parsedRows) {
+      // Resolve (or create) the account row for this transaction.
+      // accountNumberRaw is the Questrade "Account #" — the stable
+      // identity. Empty string falls back to a single shared account.
+      let accountId: number | null = null
+      if (row.accountNumberRaw) {
+        const cached = accountByBrokerNumber.get(row.accountNumberRaw)
+        if (cached !== undefined) {
+          accountId = cached
+        } else {
+          const acc = ensureAccountFromQuestrade({
+            brokerAccountNumber: row.accountNumberRaw,
+            accountTypeRaw: row.accountTypeRaw,
+            defaultCurrency: row.input.currency,
+          })
+          accountId = acc.id
+          accountByBrokerNumber.set(row.accountNumberRaw, acc.id)
         }
-        existingTickers.add(input.ticker)
+      }
+      createTransaction({ ...row.input, accountId })
+      summary.byAccount[row.accountLabel] =
+        (summary.byAccount[row.accountLabel] ?? 0) + 1
+      summary.imported++
+      if (!existingTickers.has(row.input.ticker)) {
+        if (!summary.newTickers.includes(row.input.ticker)) {
+          summary.newTickers.push(row.input.ticker)
+        }
+        existingTickers.add(row.input.ticker)
       }
     }
   })

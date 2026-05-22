@@ -9,6 +9,7 @@ import { closeTestDb, makeTestDb } from './helpers/db'
 import { importQuestradeXlsx } from '../main/services/import-questrade'
 import { listTransactions } from '../main/db/repo/transactions'
 import { listTickers } from '../main/db/repo/tickers'
+import { listAccounts } from '../main/db/repo/accounts'
 
 let db: Database.Database
 
@@ -210,6 +211,83 @@ describe('import-questrade.importQuestradeXlsx', () => {
     XLSX.writeFile(wb, path)
     try {
       expect(() => importQuestradeXlsx(path)).toThrow(/missing expected/i)
+    } finally {
+      unlinkSync(path)
+    }
+  })
+
+  it('creates one account per broker Account # and links transactions', () => {
+    // Two FHSA trades + one TFSA trade — two distinct broker numbers,
+    // so we expect two accounts to materialize and each transaction
+    // to be linked to the correct one. The third Buy on the same
+    // FHSA account # should reuse the existing account (no duplicate
+    // accounts row).
+    const path = writeWorkbook([
+      {
+        'Transaction Date': '2025-08-18 12:00:00 AM',
+        'Settlement Date': '2025-08-19 12:00:00 AM',
+        'Action': 'Buy',
+        'Symbol': 'SBET',
+        'Description': 'SHARPLINK',
+        'Quantity': '10',
+        'Price': '20.00',
+        'Gross Amount': '-200.00',
+        'Commission': '0.00',
+        'Net Amount': '-200.00',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual FHSA',
+      },
+      {
+        'Transaction Date': '2025-08-19 12:00:00 AM',
+        'Settlement Date': '2025-08-20 12:00:00 AM',
+        'Action': 'Buy',
+        'Symbol': 'AAPL',
+        'Description': 'APPLE',
+        'Quantity': '5',
+        'Price': '180.00',
+        'Gross Amount': '-900.00',
+        'Commission': '0.00',
+        'Net Amount': '-900.00',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual FHSA',
+      },
+      {
+        'Transaction Date': '2025-07-25 12:00:00 AM',
+        'Settlement Date': '2025-07-28 12:00:00 AM',
+        'Action': 'Sell',
+        'Symbol': 'GME',
+        'Description': 'GAMESTOP',
+        'Quantity': '-2.00000',
+        'Price': '23.57',
+        'Gross Amount': '47.15',
+        'Commission': '0.00',
+        'Net Amount': '47.15',
+        'Currency': 'USD',
+        'Account #': '52278815',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual TFSA',
+      },
+    ])
+    try {
+      const summary = importQuestradeXlsx(path)
+      expect(summary.imported).toBe(3)
+
+      const accounts = listAccounts()
+      expect(accounts).toHaveLength(2)
+      const fhsa = accounts.find((a) => a.brokerAccountNumber === '53543085')!
+      const tfsa = accounts.find((a) => a.brokerAccountNumber === '52278815')!
+      expect(fhsa.kind).toBe('fhsa')
+      expect(tfsa.kind).toBe('tfsa')
+
+      const txs = listTransactions()
+      const sbet = txs.find((t) => t.ticker === 'SBET')!
+      const gme = txs.find((t) => t.ticker === 'GME')!
+      expect(sbet.accountId).toBe(fhsa.id)
+      expect(gme.accountId).toBe(tfsa.id)
     } finally {
       unlinkSync(path)
     }
