@@ -3,6 +3,8 @@ import { IPC } from './ipc/channels'
 import type {
   Account,
   AccountInput,
+  Dividend,
+  DividendInput,
   Holding,
   Sector,
   Setting,
@@ -82,6 +84,22 @@ const api = {
       ipcRenderer.invoke(IPC.accounts.update, id, input) as Promise<Account | null>,
     delete: (id: number) =>
       ipcRenderer.invoke(IPC.accounts.delete, id) as Promise<void>,
+  },
+  dividends: {
+    list: (filter?: {
+      ticker?: string | null
+      accountId?: number | null
+      sinceYyyyMmDd?: string
+    }) =>
+      ipcRenderer.invoke(IPC.dividends.list, filter) as Promise<Dividend[]>,
+    create: (input: DividendInput) =>
+      ipcRenderer.invoke(IPC.dividends.create, input) as Promise<Dividend>,
+    update: (id: number, input: Partial<DividendInput>) =>
+      ipcRenderer.invoke(IPC.dividends.update, id, input) as Promise<
+        Dividend | null
+      >,
+    delete: (id: number) =>
+      ipcRenderer.invoke(IPC.dividends.delete, id) as Promise<void>,
   },
   settings: {
     get: (key: string) =>

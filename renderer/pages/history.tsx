@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/table'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { PortfolioPerformanceChart } from '@/components/dashboard/PortfolioPerformanceChart'
+import { DividendsCard } from '@/components/history/DividendsCard'
 import type { Account, Transaction } from '../../main/db/types'
 
 const ALL_TICKERS = '__all__'
@@ -199,6 +200,11 @@ export default function HistoryPage() {
             fresh install because it walks the txs ledger + history cache
             rather than depending on snapshots. */}
         <PortfolioPerformanceChart locale={locale} />
+
+        {/* Dividends — pulled from a separate ledger populated by the
+            Questrade importer + manual entries. Per-ticker breakdown +
+            recent payments table inside its own card. */}
+        <DividendsCard accounts={accounts} locale={locale} />
 
         {/* Lifetime activity KPIs. Computed over the full txs list, not
             the table filter. */}

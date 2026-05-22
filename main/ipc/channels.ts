@@ -24,6 +24,12 @@ export const IPC = {
     update: 'accounts:update',
     delete: 'accounts:delete',
   },
+  dividends: {
+    list: 'dividends:list',
+    create: 'dividends:create',
+    update: 'dividends:update',
+    delete: 'dividends:delete',
+  },
   settings: {
     get: 'settings:get',
     set: 'settings:set',

@@ -3,8 +3,9 @@ import * as XLSX from 'xlsx'
 
 import { getDb } from '../db/connection'
 import { ensureAccountFromQuestrade } from '../db/repo/accounts'
+import { upsertDividendFromExternalId } from '../db/repo/dividends'
 import { createTransaction } from '../db/repo/transactions'
-import type { Currency, TransactionInput } from '../db/types'
+import type { Currency, DividendInput, TransactionInput } from '../db/types'
 
 // Exact column headers Questrade emits in its "Activities" XLSX export.
 // We pin them here so a format change shows up loudly as "Missing column"
@@ -25,17 +26,22 @@ type RawRow = Record<string, string | number | undefined>
 
 export interface ImportSummary {
   imported: number
-  // Rows whose Activity Type is not "Trades" (FX conversions, deposits,
-  // dividends, etc.) — we drop them on purpose.
+  // Rows that don't fall into Trades / Dividends — FX conversions,
+  // contributions, withdrawals. We drop them on purpose.
   skippedNonTrade: number
   // Trade rows that failed validation (bad number, empty symbol, etc.).
   skippedInvalid: number
   // Tickers that didn't exist before this import — created automatically.
   newTickers: string[]
-  // Per-account count, just for the toast.
+  // Per-account count of imported trades, just for the toast.
   byAccount: Record<string, number>
   // The first 5 invalid rows so we can surface a hint in the toast/dialog.
   invalidReasons: string[]
+  // Dividends / distributions parsed from "Dividends" + "Interest"
+  // Activity Type rows. dedupedExisting counts rows that already lived
+  // in the DB via external_id (re-import case).
+  dividendsImported: number
+  dividendsExisting: number
 }
 
 function parseCurrency(c: unknown): Currency | null {
@@ -64,6 +70,90 @@ interface ParsedRow {
   // insert pass — the actual id is resolved inside the SQL transaction.
   accountTypeRaw: string
   accountNumberRaw: string
+}
+
+interface ParsedDividend {
+  input: Omit<DividendInput, 'accountId'> & { externalId: string }
+  accountTypeRaw: string
+  accountNumberRaw: string
+}
+
+// Rows with Activity Type matching one of these are dividend / income
+// events rather than trades. The Questrade taxonomy lumps several
+// labels under each — match by lowercased substring so future-tense
+// variations don't silently slip through.
+const DIVIDEND_ACTIVITY_PATTERNS = [
+  'dividend',
+  'distribution',
+  // Interest paid by Questrade (rare for retail equity accounts but
+  // does happen in cash holdings + bond ETFs).
+  'interest',
+] as const
+
+function detectDividendKind(
+  activityType: string,
+  action: string,
+): DividendInput['kind'] | null {
+  const t = `${activityType} ${action}`.toLowerCase()
+  if (t.includes('interest')) return 'interest'
+  if (t.includes('distribution')) return 'distribution'
+  // Common Questrade Action strings for dividends:
+  //   "DIV"      = cash dividend
+  //   "REI"/"DRP" = dividend reinvestment (we treat as a dividend
+  //                 event; the buy back into the position lands as a
+  //                 separate Trade row Questrade emits alongside).
+  if (
+    t.includes('dividend') ||
+    /\b(div|rei|drp)\b/.test(t)
+  ) {
+    return 'dividend'
+  }
+  return null
+}
+
+function rowToDividend(row: RawRow): ParsedDividend | { error: string } | null {
+  const activityType = String(row['Activity Type'] ?? '').trim()
+  const action = String(row['Action'] ?? '').trim()
+  const haystack = activityType.toLowerCase()
+  if (!DIVIDEND_ACTIVITY_PATTERNS.some((p) => haystack.includes(p))) {
+    return null
+  }
+  const kind = detectDividendKind(activityType, action) ?? 'dividend'
+  const symbol = String(row['Symbol'] ?? '').trim().toUpperCase() || null
+  const occurredAt = parseDate(row['Transaction Date'])
+  if (!occurredAt) return { error: `invalid dividend date${symbol ? ' for ' + symbol : ''}` }
+  // Questrade's "Net Amount" is what actually landed in the account
+  // (gross dividend minus withholding tax). That's what we want as
+  // the income figure. Take abs() because Questrade sometimes signs
+  // dividends positively, sometimes not.
+  const amount = Math.abs(parseNumber(row['Net Amount']) ?? 0)
+  if (amount <= 0) return { error: `zero dividend amount${symbol ? ' for ' + symbol : ''}` }
+  const currency = parseCurrency(row['Currency'])
+  if (!currency) return { error: `invalid currency${symbol ? ' for ' + symbol : ''}` }
+  const accountNo = String(row['Account #'] ?? '').trim()
+  // External id derived from natural-key fields. A re-import lands the
+  // same string and the UNIQUE index on dividends.external_id makes the
+  // upsert a no-op for already-known payments. Notes is included
+  // because Questrade sometimes lists multiple payments for the same
+  // ticker on the same date with different descriptions (different
+  // share classes); using the description prevents the dedup from
+  // collapsing them.
+  const description = String(row['Description'] ?? '').trim()
+  const externalId = `qt:${accountNo}:${symbol ?? '-'}:${occurredAt}:${amount.toFixed(4)}:${description.slice(0, 40)}`
+  return {
+    accountTypeRaw: String(row['Account Type'] ?? '').trim(),
+    accountNumberRaw: accountNo,
+    input: {
+      ticker: symbol,
+      amount,
+      currency,
+      paidAt: occurredAt,
+      kind,
+      source: 'questrade',
+      externalId,
+      notes: description || null,
+    },
+  }
 }
 
 function rowToTransaction(row: RawRow): ParsedRow | { error: string } {
@@ -151,6 +241,8 @@ export function importQuestradeXlsx(filePath: string): ImportSummary {
     newTickers: [],
     byAccount: {},
     invalidReasons: [],
+    dividendsImported: 0,
+    dividendsExisting: 0,
   }
 
   // Snapshot the existing tickers BEFORE the import so we can report which
@@ -166,58 +258,100 @@ export function importQuestradeXlsx(filePath: string): ImportSummary {
   // transaction because new accounts get inserted here and need to
   // be readable on the next iteration.
   const accountByBrokerNumber = new Map<string, number>()
-  const insertAll = getDb().transaction((parsedRows: ParsedRow[]) => {
-    for (const row of parsedRows) {
-      // Resolve (or create) the account row for this transaction.
-      // accountNumberRaw is the Questrade "Account #" — the stable
-      // identity. Empty string falls back to a single shared account.
-      let accountId: number | null = null
-      if (row.accountNumberRaw) {
-        const cached = accountByBrokerNumber.get(row.accountNumberRaw)
-        if (cached !== undefined) {
-          accountId = cached
-        } else {
-          const acc = ensureAccountFromQuestrade({
-            brokerAccountNumber: row.accountNumberRaw,
-            accountTypeRaw: row.accountTypeRaw,
-            defaultCurrency: row.input.currency,
-          })
-          accountId = acc.id
-          accountByBrokerNumber.set(row.accountNumberRaw, acc.id)
+  function resolveAccountId(
+    accountNumberRaw: string,
+    accountTypeRaw: string,
+    defaultCurrency: Currency,
+  ): number | null {
+    if (!accountNumberRaw) return null
+    const cached = accountByBrokerNumber.get(accountNumberRaw)
+    if (cached !== undefined) return cached
+    const acc = ensureAccountFromQuestrade({
+      brokerAccountNumber: accountNumberRaw,
+      accountTypeRaw,
+      defaultCurrency,
+    })
+    accountByBrokerNumber.set(accountNumberRaw, acc.id)
+    return acc.id
+  }
+
+  const insertAll = getDb().transaction(
+    (
+      parsedRows: ParsedRow[],
+      parsedDividends: ParsedDividend[],
+    ) => {
+      for (const row of parsedRows) {
+        const accountId = resolveAccountId(
+          row.accountNumberRaw,
+          row.accountTypeRaw,
+          row.input.currency,
+        )
+        createTransaction({ ...row.input, accountId })
+        summary.byAccount[row.accountLabel] =
+          (summary.byAccount[row.accountLabel] ?? 0) + 1
+        summary.imported++
+        if (!existingTickers.has(row.input.ticker)) {
+          if (!summary.newTickers.includes(row.input.ticker)) {
+            summary.newTickers.push(row.input.ticker)
+          }
+          existingTickers.add(row.input.ticker)
         }
       }
-      createTransaction({ ...row.input, accountId })
-      summary.byAccount[row.accountLabel] =
-        (summary.byAccount[row.accountLabel] ?? 0) + 1
-      summary.imported++
-      if (!existingTickers.has(row.input.ticker)) {
-        if (!summary.newTickers.includes(row.input.ticker)) {
-          summary.newTickers.push(row.input.ticker)
-        }
-        existingTickers.add(row.input.ticker)
+      for (const div of parsedDividends) {
+        const accountId = resolveAccountId(
+          div.accountNumberRaw,
+          div.accountTypeRaw,
+          div.input.currency,
+        )
+        // upsert by external_id — if a row with the same natural key
+        // already exists, we get it back unchanged and count it as
+        // dividendsExisting instead of importing again.
+        const before = getDb()
+          .prepare('SELECT 1 FROM dividends WHERE external_id = ?')
+          .get(div.input.externalId)
+        upsertDividendFromExternalId({ ...div.input, accountId })
+        if (before) summary.dividendsExisting++
+        else summary.dividendsImported++
       }
-    }
-  })
+    },
+  )
 
   const parsed: ParsedRow[] = []
+  const parsedDividends: ParsedDividend[] = []
   for (const row of rows) {
     const activityType = String(row['Activity Type'] ?? '').trim()
-    if (activityType !== 'Trades') {
+    if (activityType === 'Trades') {
+      const result = rowToTransaction(row)
+      if ('error' in result) {
+        summary.skippedInvalid++
+        if (summary.invalidReasons.length < 5) {
+          summary.invalidReasons.push(result.error)
+        }
+        continue
+      }
+      parsed.push(result)
+      continue
+    }
+    // Dividends / Interest / Distributions captured separately.
+    const divResult = rowToDividend(row)
+    if (divResult === null) {
       summary.skippedNonTrade++
       continue
     }
-    const result = rowToTransaction(row)
-    if ('error' in result) {
-      summary.skippedInvalid++
+    if ('error' in divResult) {
+      // Don't conflate with trade-invalid count — these are dividend
+      // rows that look malformed; treat as skipped non-trade so the
+      // summary still tells the truth.
+      summary.skippedNonTrade++
       if (summary.invalidReasons.length < 5) {
-        summary.invalidReasons.push(result.error)
+        summary.invalidReasons.push(divResult.error)
       }
       continue
     }
-    parsed.push(result)
+    parsedDividends.push(divResult)
   }
 
-  insertAll(parsed)
+  insertAll(parsed, parsedDividends)
 
   return summary
 }

@@ -105,3 +105,33 @@ export interface Setting {
   value: string
   updatedAt: number
 }
+
+export type DividendKind = 'dividend' | 'interest' | 'distribution'
+export type DividendSource = 'manual' | 'questrade'
+
+export interface Dividend {
+  id: number
+  ticker: string | null
+  accountId: number | null
+  amount: number
+  currency: Currency
+  paidAt: string  // yyyy-mm-dd
+  kind: DividendKind
+  notes: string | null
+  source: DividendSource
+  externalId: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface DividendInput {
+  ticker?: string | null
+  accountId?: number | null
+  amount: number
+  currency: Currency
+  paidAt: string
+  kind?: DividendKind
+  notes?: string | null
+  source?: DividendSource
+  externalId?: string | null
+}

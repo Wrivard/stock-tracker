@@ -249,6 +249,31 @@ const dict: Dict = {
   'accounts.kind.taxable': { fr: 'Non-enregistre', en: 'Taxable' },
   'accounts.kind.other': { fr: 'Autre', en: 'Other' },
 
+  'dividends.title': { fr: 'Dividendes', en: 'Dividends' },
+  'dividends.subtitle': {
+    fr: "Revenus de dividendes, distributions et interets recus.",
+    en: 'Dividends, distributions, and interest received.',
+  },
+  'dividends.empty': {
+    fr: "Aucun dividende. L'import Questrade les capture automatiquement, ou ajoute-les manuellement.",
+    en: 'No dividends yet. Questrade import captures them automatically, or add manually.',
+  },
+  'dividends.total': { fr: 'Total recu', en: 'Total received' },
+  'dividends.last12mo': { fr: 'Derniers 12 mois', en: 'Last 12 months' },
+  'dividends.thisYear': { fr: 'Annee en cours', en: 'This year' },
+  'dividends.count': { fr: 'Paiements', en: 'Payments' },
+  'dividends.add': { fr: 'Ajouter dividende', en: 'Add dividend' },
+  'dividends.fields.ticker': { fr: 'Ticker (optionnel)', en: 'Ticker (optional)' },
+  'dividends.fields.amount': { fr: 'Montant', en: 'Amount' },
+  'dividends.fields.currency': { fr: 'Devise', en: 'Currency' },
+  'dividends.fields.paidAt': { fr: 'Date de paiement', en: 'Pay date' },
+  'dividends.fields.kind': { fr: 'Type', en: 'Kind' },
+  'dividends.fields.account': { fr: 'Compte', en: 'Account' },
+  'dividends.kind.dividend': { fr: 'Dividende', en: 'Dividend' },
+  'dividends.kind.interest': { fr: 'Interets', en: 'Interest' },
+  'dividends.kind.distribution': { fr: 'Distribution', en: 'Distribution' },
+  'dividends.delete': { fr: 'Supprimer', en: 'Delete' },
+
   'history.title': { fr: 'Historique', en: 'History' },
   'history.empty': {
     fr: 'Aucun snapshot pour l\'instant. Le premier sera enregistre des qu\'un prix sera disponible.',

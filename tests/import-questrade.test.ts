@@ -10,6 +10,7 @@ import { importQuestradeXlsx } from '../main/services/import-questrade'
 import { listTransactions } from '../main/db/repo/transactions'
 import { listTickers } from '../main/db/repo/tickers'
 import { listAccounts } from '../main/db/repo/accounts'
+import { listDividends } from '../main/db/repo/dividends'
 
 let db: Database.Database
 
@@ -288,6 +289,96 @@ describe('import-questrade.importQuestradeXlsx', () => {
       const gme = txs.find((t) => t.ticker === 'GME')!
       expect(sbet.accountId).toBe(fhsa.id)
       expect(gme.accountId).toBe(tfsa.id)
+    } finally {
+      unlinkSync(path)
+    }
+  })
+
+  it('imports Dividend rows into the dividends ledger', () => {
+    const path = writeWorkbook([
+      // A regular trade — sanity check that mixed rows still both
+      // land in their respective tables.
+      {
+        'Transaction Date': '2025-08-18 12:00:00 AM',
+        'Settlement Date': '2025-08-19 12:00:00 AM',
+        'Action': 'Buy',
+        'Symbol': 'AAPL',
+        'Description': 'APPLE',
+        'Quantity': '10',
+        'Price': '180.00',
+        'Gross Amount': '-1800.00',
+        'Commission': '0.00',
+        'Net Amount': '-1800.00',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'Trades',
+        'Account Type': 'Individual TFSA',
+      },
+      // A cash dividend.
+      {
+        'Transaction Date': '2025-09-12 12:00:00 AM',
+        'Settlement Date': '2025-09-12 12:00:00 AM',
+        'Action': 'DIV',
+        'Symbol': 'AAPL',
+        'Description': 'CASH DIV ON 10 SHARES',
+        'Quantity': '0',
+        'Price': '0',
+        'Gross Amount': '2.40',
+        'Commission': '0.00',
+        'Net Amount': '2.40',
+        'Currency': 'USD',
+        'Account #': '53543085',
+        'Activity Type': 'Dividends',
+        'Account Type': 'Individual TFSA',
+      },
+      // An ETF distribution (Activity Type contains "distribution").
+      {
+        'Transaction Date': '2025-09-30 12:00:00 AM',
+        'Settlement Date': '2025-09-30 12:00:00 AM',
+        'Action': 'DIS',
+        'Symbol': 'XEQT.TO',
+        'Description': 'QTRLY DISTRIBUTION',
+        'Quantity': '0',
+        'Price': '0',
+        'Gross Amount': '14.50',
+        'Commission': '0.00',
+        'Net Amount': '14.50',
+        'Currency': 'CAD',
+        'Account #': '53543085',
+        'Activity Type': 'Distributions',
+        'Account Type': 'Individual TFSA',
+      },
+    ])
+    try {
+      const summary = importQuestradeXlsx(path)
+      expect(summary.imported).toBe(1)
+      expect(summary.dividendsImported).toBe(2)
+      expect(summary.dividendsExisting).toBe(0)
+
+      const divs = listDividends()
+      expect(divs).toHaveLength(2)
+      const aapl = divs.find((d) => d.ticker === 'AAPL')!
+      const xeqt = divs.find((d) => d.ticker === 'XEQT.TO')!
+      expect(aapl.amount).toBeCloseTo(2.4, 2)
+      expect(aapl.kind).toBe('dividend')
+      expect(aapl.currency).toBe('USD')
+      expect(aapl.source).toBe('questrade')
+      expect(xeqt.amount).toBeCloseTo(14.5, 2)
+      expect(xeqt.kind).toBe('distribution')
+      expect(xeqt.currency).toBe('CAD')
+
+      // Account linking should reach the dividends rows too.
+      const accs = listAccounts()
+      expect(accs).toHaveLength(1)
+      expect(aapl.accountId).toBe(accs[0].id)
+      expect(xeqt.accountId).toBe(accs[0].id)
+
+      // Re-import the same file — dividends should NOT duplicate
+      // because external_id is unique-indexed.
+      const second = importQuestradeXlsx(path)
+      expect(second.dividendsImported).toBe(0)
+      expect(second.dividendsExisting).toBe(2)
+      expect(listDividends()).toHaveLength(2)
     } finally {
       unlinkSync(path)
     }

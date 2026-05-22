@@ -13,6 +13,7 @@ const { autoUpdater } = electronUpdaterPkg
 
 import { IPC } from './channels'
 import * as accountsRepo from '../db/repo/accounts'
+import * as dividendsRepo from '../db/repo/dividends'
 import * as holdingsRepo from '../db/repo/holdings'
 import * as sectorsRepo from '../db/repo/sectors'
 import * as settingsRepo from '../db/repo/settings'
@@ -48,6 +49,26 @@ const AccountInputSchema = z.object({
   brokerAccountNumber: z.string().max(40).nullable().optional(),
   defaultCurrency: Currency.nullable().optional(),
 })
+
+const DividendKind = z.enum(['dividend', 'interest', 'distribution'])
+const DividendInputSchema = z.object({
+  ticker: z.string().max(20).nullable().optional(),
+  accountId: z.number().int().positive().nullable().optional(),
+  amount: z.number().nonnegative(),
+  currency: Currency,
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  kind: DividendKind.optional(),
+  notes: z.string().max(500).nullable().optional(),
+  source: z.enum(['manual', 'questrade']).optional(),
+  externalId: z.string().max(120).nullable().optional(),
+})
+const DividendFilterSchema = z
+  .object({
+    ticker: z.string().nullable().optional(),
+    accountId: z.number().int().positive().nullable().optional(),
+    sinceYyyyMmDd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+  .optional()
 
 const TickerInputSchema = z.object({
   symbol: z.string().min(1).max(20),
@@ -193,6 +214,34 @@ export function registerIpcHandlers(): void {
     IPC.accounts.delete,
     wrap((id: number) =>
       accountsRepo.deleteAccount(z.number().int().positive().parse(id)),
+    ),
+  )
+
+  ipcMain.handle(
+    IPC.dividends.list,
+    wrap((filter: unknown) =>
+      dividendsRepo.listDividends(DividendFilterSchema.parse(filter)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.dividends.create,
+    wrap((input: unknown) =>
+      dividendsRepo.createDividend(DividendInputSchema.parse(input)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.dividends.update,
+    wrap((id: number, input: unknown) =>
+      dividendsRepo.updateDividend(
+        z.number().int().positive().parse(id),
+        DividendInputSchema.partial().parse(input),
+      ),
+    ),
+  )
+  ipcMain.handle(
+    IPC.dividends.delete,
+    wrap((id: number) =>
+      dividendsRepo.deleteDividend(z.number().int().positive().parse(id)),
     ),
   )
 

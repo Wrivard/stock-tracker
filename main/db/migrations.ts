@@ -114,6 +114,47 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_transactions_account ON transactions(account_id);
     `,
   },
+  {
+    // v4 — dividends ledger. Questrade XLSX already emits DIV /
+    // dividend reinvestment rows that we were silently dropping in
+    // import-questrade (Activity Type != 'Trades'). Now we capture
+    // them as a separate ledger keyed by (ticker, paid_at, account)
+    // so total return calculations + per-ticker yield + tax-year
+    // income views become possible.
+    //
+    // No quantity/price split — Questrade reports dividends as a
+    // single cash amount per payment. ticker is nullable so manual
+    // entries for things like cash interest can still be recorded
+    // when we eventually surface that UI.
+    version: 4,
+    up: `
+      CREATE TABLE dividends (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker TEXT REFERENCES tickers(symbol) ON DELETE SET NULL,
+        account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+        amount REAL NOT NULL CHECK (amount >= 0),
+        currency TEXT NOT NULL CHECK (currency IN ('USD','CAD')),
+        paid_at TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'dividend'
+          CHECK (kind IN ('dividend','interest','distribution')),
+        notes TEXT,
+        source TEXT NOT NULL DEFAULT 'manual'
+          CHECK (source IN ('manual','questrade')),
+        external_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_dividends_ticker ON dividends(ticker);
+      CREATE INDEX idx_dividends_paid_at ON dividends(paid_at);
+      CREATE INDEX idx_dividends_account ON dividends(account_id);
+      -- external_id is the row's natural key when imported from
+      -- Questrade (built from ticker + date + amount); UNIQUE
+      -- ensures re-imports don't duplicate the same payment.
+      CREATE UNIQUE INDEX idx_dividends_external
+        ON dividends(external_id) WHERE external_id IS NOT NULL;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {
