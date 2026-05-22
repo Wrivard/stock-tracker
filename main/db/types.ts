@@ -69,6 +69,9 @@ export interface Transaction {
   // migration land here, as do manually-entered transactions without
   // an explicit account choice.
   accountId: number | null
+  // Stable natural-key for de-dup on broker re-import. null for
+  // manually-entered transactions.
+  externalId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -83,6 +86,7 @@ export interface TransactionInput {
   notes?: string | null
   occurredAt: string
   accountId?: number | null
+  externalId?: string | null
 }
 
 export interface Holding {

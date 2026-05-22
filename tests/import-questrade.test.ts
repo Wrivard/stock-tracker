@@ -384,11 +384,12 @@ describe('import-questrade.importQuestradeXlsx', () => {
     }
   })
 
-  it('is idempotent enough to handle a second pass (creates duplicates)', () => {
-    // Documents the current behavior: re-importing the same file inserts
-    // duplicates. We don't dedupe by (ticker,date,quantity,price) yet —
-    // the user should backup first or only import once. This test pins
-    // the behavior so a future change is intentional.
+  it('is idempotent on re-import: trades upsert by external_id', () => {
+    // v0.1.31: re-importing the same XLSX no longer duplicates the
+    // trade rows. external_id is built from (account, ticker, date,
+    // kind, qty, price, description) and uniquely indexed, so the
+    // second pass returns existingTrades=N and listTransactions()
+    // is unchanged.
     const rows = [
       {
         'Transaction Date': '2025-08-18 12:00:00 AM',
@@ -409,12 +410,17 @@ describe('import-questrade.importQuestradeXlsx', () => {
     ]
     const path = writeWorkbook(rows)
     try {
-      importQuestradeXlsx(path)
+      const first = importQuestradeXlsx(path)
+      expect(first.imported).toBe(1)
+      expect(first.existingTrades).toBe(0)
+
       const second = importQuestradeXlsx(path)
-      expect(second.imported).toBe(1)
-      // Second pass doesn't report SBET as new because it already exists.
+      expect(second.imported).toBe(0)
+      expect(second.existingTrades).toBe(1)
+      // Same ticker that was already in the DB, so no "new" ticker.
       expect(second.newTickers).toEqual([])
-      expect(listTransactions()).toHaveLength(2)
+      // Crucial: only ONE row in transactions, not two.
+      expect(listTransactions()).toHaveLength(1)
     } finally {
       unlinkSync(path)
     }

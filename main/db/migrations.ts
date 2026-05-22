@@ -155,6 +155,22 @@ const MIGRATIONS: Migration[] = [
         ON dividends(external_id) WHERE external_id IS NOT NULL;
     `,
   },
+  {
+    // v5 — make Questrade trade re-imports idempotent. Before this,
+    // a second import of the same XLSX file duplicated every Buy/Sell
+    // row in the transactions table (only dividends had external_id
+    // dedup). Now transactions get an optional external_id with a
+    // partial-unique index, mirroring the dividends pattern. The
+    // importer builds the id from (account # + ticker + date + kind
+    // + quantity + price) so the same row imported twice collapses
+    // into a single transaction row.
+    version: 5,
+    up: `
+      ALTER TABLE transactions ADD COLUMN external_id TEXT;
+      CREATE UNIQUE INDEX idx_transactions_external
+        ON transactions(external_id) WHERE external_id IS NOT NULL;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

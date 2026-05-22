@@ -18,6 +18,7 @@ interface TransactionRow {
   notes: string | null
   occurred_at: string
   account_id: number | null
+  external_id: string | null
   created_at: number
   updated_at: number
 }
@@ -33,6 +34,7 @@ const rowToTransaction = (r: TransactionRow): Transaction => ({
   notes: r.notes,
   occurredAt: r.occurred_at,
   accountId: r.account_id,
+  externalId: r.external_id,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -50,9 +52,9 @@ export function createTransaction(input: TransactionInput): Transaction {
   const result = getDb()
     .prepare(
       `INSERT INTO transactions
-         (ticker, kind, quantity, price, currency, fees, notes, occurred_at, account_id, created_at, updated_at)
+         (ticker, kind, quantity, price, currency, fees, notes, occurred_at, account_id, external_id, created_at, updated_at)
        VALUES
-         (@ticker, @kind, @quantity, @price, @currency, @fees, @notes, @occurredAt, @accountId, @createdAt, @updatedAt)`,
+         (@ticker, @kind, @quantity, @price, @currency, @fees, @notes, @occurredAt, @accountId, @externalId, @createdAt, @updatedAt)`,
     )
     .run({
       ticker: symbol,
@@ -64,11 +66,27 @@ export function createTransaction(input: TransactionInput): Transaction {
       notes: input.notes ?? null,
       occurredAt: input.occurredAt,
       accountId: input.accountId ?? null,
+      externalId: input.externalId ?? null,
       createdAt: now,
       updatedAt: now,
     })
 
   return getTransactionById(result.lastInsertRowid as number)!
+}
+
+// Used by the Questrade importer. external_id collisions mean the row
+// was already imported in a previous pass — return the existing row
+// without inserting. Mirrors upsertDividendFromExternalId.
+export function upsertTransactionFromExternalId(
+  input: TransactionInput & { externalId: string },
+): { transaction: Transaction; created: boolean } {
+  const existing = getDb()
+    .prepare('SELECT * FROM transactions WHERE external_id = ?')
+    .get(input.externalId) as TransactionRow | undefined
+  if (existing) {
+    return { transaction: rowToTransaction(existing), created: false }
+  }
+  return { transaction: createTransaction(input), created: true }
 }
 
 export function getTransactionById(id: number): Transaction | null {
@@ -116,7 +134,7 @@ export function updateTransaction(
   getDb()
     .prepare(
       `UPDATE transactions
-       SET kind = ?, quantity = ?, price = ?, currency = ?, fees = ?, notes = ?, occurred_at = ?, account_id = ?, updated_at = ?
+       SET kind = ?, quantity = ?, price = ?, currency = ?, fees = ?, notes = ?, occurred_at = ?, account_id = ?, external_id = ?, updated_at = ?
        WHERE id = ?`,
     )
     .run(
@@ -128,6 +146,7 @@ export function updateTransaction(
       merged.notes,
       merged.occurredAt,
       merged.accountId,
+      merged.externalId,
       now,
       id,
     )

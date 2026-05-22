@@ -83,7 +83,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       toast.success(
         t('import.summary', {
           imported: summary.imported,
-          skippedNonTrade: summary.skippedNonTrade,
+          existingTrades: summary.existingTrades,
+          dividendsImported: summary.dividendsImported,
           skippedInvalid: summary.skippedInvalid,
         }),
       )

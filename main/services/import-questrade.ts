@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 import { getDb } from '../db/connection'
 import { ensureAccountFromQuestrade } from '../db/repo/accounts'
 import { upsertDividendFromExternalId } from '../db/repo/dividends'
-import { createTransaction } from '../db/repo/transactions'
+import { upsertTransactionFromExternalId } from '../db/repo/transactions'
 import type { Currency, DividendInput, TransactionInput } from '../db/types'
 
 // Exact column headers Questrade emits in its "Activities" XLSX export.
@@ -26,6 +26,9 @@ type RawRow = Record<string, string | number | undefined>
 
 export interface ImportSummary {
   imported: number
+  // Trades whose external_id matched an existing row — counted
+  // separately so re-imports don't lie about insertion count.
+  existingTrades: number
   // Rows that don't fall into Trades / Dividends — FX conversions,
   // contributions, withdrawals. We drop them on purpose.
   skippedNonTrade: number
@@ -188,6 +191,14 @@ function rowToTransaction(row: RawRow): ParsedRow | { error: string } {
   const accountLabel = accountType || accountNo || 'Questrade'
   const note = `Imported from Questrade · ${accountLabel}${accountNo ? ` #${accountNo}` : ''}`
 
+  // External id derived from the natural-key fields of this row, so
+  // re-importing the same XLSX collapses to the existing transactions
+  // instead of duplicating them. Description is included because
+  // Questrade emits multiple Buy rows on the same date for the same
+  // ticker (different fills of one logical order) — using description
+  // avoids the dedup conflating them.
+  const description = String(row['Description'] ?? '').trim()
+  const externalId = `qt:${accountNo}:${symbol}:${occurredAt}:${action.toLowerCase()}:${absQuantity.toFixed(4)}:${price.toFixed(6)}:${description.slice(0, 40)}`
   return {
     accountLabel,
     accountTypeRaw: accountType,
@@ -201,6 +212,7 @@ function rowToTransaction(row: RawRow): ParsedRow | { error: string } {
       fees,
       notes: note,
       occurredAt,
+      externalId,
       // accountId is filled in during the SQL transaction below
       // because ensureAccountFromQuestrade may need to INSERT a new
       // accounts row first.
@@ -236,6 +248,7 @@ export function importQuestradeXlsx(filePath: string): ImportSummary {
 
   const summary: ImportSummary = {
     imported: 0,
+    existingTrades: 0,
     skippedNonTrade: 0,
     skippedInvalid: 0,
     newTickers: [],
@@ -286,15 +299,26 @@ export function importQuestradeXlsx(filePath: string): ImportSummary {
           row.accountTypeRaw,
           row.input.currency,
         )
-        createTransaction({ ...row.input, accountId })
-        summary.byAccount[row.accountLabel] =
-          (summary.byAccount[row.accountLabel] ?? 0) + 1
-        summary.imported++
-        if (!existingTickers.has(row.input.ticker)) {
-          if (!summary.newTickers.includes(row.input.ticker)) {
-            summary.newTickers.push(row.input.ticker)
+        // upsert via the external_id built in rowToTransaction —
+        // re-imports of the same file leave the table unchanged.
+        const externalId = row.input.externalId ?? ''
+        const { created } = upsertTransactionFromExternalId({
+          ...row.input,
+          accountId,
+          externalId,
+        })
+        if (created) {
+          summary.byAccount[row.accountLabel] =
+            (summary.byAccount[row.accountLabel] ?? 0) + 1
+          summary.imported++
+          if (!existingTickers.has(row.input.ticker)) {
+            if (!summary.newTickers.includes(row.input.ticker)) {
+              summary.newTickers.push(row.input.ticker)
+            }
+            existingTickers.add(row.input.ticker)
           }
-          existingTickers.add(row.input.ticker)
+        } else {
+          summary.existingTrades++
         }
       }
       for (const div of parsedDividends) {

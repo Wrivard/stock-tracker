@@ -215,7 +215,8 @@ export default function SettingsPage() {
       toast.success(
         t('import.summary', {
           imported: summary.imported,
-          skippedNonTrade: summary.skippedNonTrade,
+          existingTrades: summary.existingTrades,
+          dividendsImported: summary.dividendsImported,
           skippedInvalid: summary.skippedInvalid,
         }),
       )

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   AlertTriangle,
   ArrowUpRight,
+  Coins,
   Plus,
   Sparkles,
   Target,
@@ -14,11 +15,11 @@ import {
 } from 'lucide-react'
 
 import type {
+  Dividend,
   Setting,
   Transaction,
 } from '../../main/db/types'
 import type { PortfolioOverview } from '../../main/services/portfolio'
-import type { PortfolioSnapshot } from '../../main/services/snapshots'
 import type { AnnotatedNewsItem } from '../../main/services/market-api'
 import { api } from '@/lib/api'
 import { useUi } from '@/lib/store'
@@ -39,7 +40,6 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { PortfolioPerformanceChart } from '@/components/dashboard/PortfolioPerformanceChart'
 import { SectorPieChart } from '@/components/dashboard/SectorPieChart'
-import { TrendSparkline } from '@/components/dashboard/TrendSparkline'
 
 export default function HomePage() {
   const { t, locale } = useT()
@@ -50,9 +50,9 @@ export default function HomePage() {
   const openQuickTrade = useUi((s) => s.openQuickTrade)
 
   const [overview, setOverview] = useState<PortfolioOverview | null>(null)
-  const [snapshots, setSnapshots] = useState<PortfolioSnapshot[]>([])
   const [recentTx, setRecentTx] = useState<Transaction[]>([])
   const [news, setNews] = useState<AnnotatedNewsItem[]>([])
+  const [dividends, setDividends] = useState<Dividend[]>([])
   const [targets, setTargets] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
@@ -67,16 +67,16 @@ export default function HomePage() {
     // a console-only silent break.
     void Promise.allSettled([
       api().portfolio.overview(displayCurrency),
-      api().snapshots.list(),
+      api().dividends.list(),
       api().transactions.list(),
       api().market.portfolioNews({ cachedOnly: true }),
       api().settings.list(),
     ])
       .then((results) => {
         if (cancelled) return
-        const [ov, snaps, txs, news, settings] = results
+        const [ov, divs, txs, news, settings] = results
         if (ov.status === 'fulfilled') setOverview(ov.value)
-        if (snaps.status === 'fulfilled') setSnapshots(snaps.value)
+        if (divs.status === 'fulfilled') setDividends(divs.value)
         if (txs.status === 'fulfilled') setRecentTx(txs.value.slice(0, 5))
         if (news.status === 'fulfilled') setNews(news.value.items.slice(0, 5))
         if (settings.status === 'fulfilled') {
@@ -224,14 +224,9 @@ export default function HomePage() {
                         overview.totalPnl === 0 ? null : overview.totalPnl > 0,
                     }}
                     icon={<Wallet className="size-3.5" />}
-                    trail={
-                      snapshots.length > 1 ? (
-                        <TrendSparkline
-                          snapshots={snapshots}
-                          displayCurrency={overview.displayCurrency}
-                        />
-                      ) : null
-                    }
+                    // TrendSparkline removed in v0.1.31 — it overlapped
+                    // the delta line on short cards and was redundant
+                    // with the full PortfolioPerformanceChart below.
                   />
                   <KpiCard
                     title={t('dashboard.dayChange')}
@@ -254,18 +249,65 @@ export default function HomePage() {
                     value={formatMoney(overview.totalCost, overview.displayCurrency, lc)}
                     hint={`${overview.positions.length} ${locale === 'fr' ? 'positions · FX' : 'positions · FX'} ${formatNumber(overview.fxUsdToCad, lc, 4)}`}
                   />
-                  <KpiCard
-                    title={locale === 'fr' ? 'Secteurs' : 'Sectors'}
-                    value={overview.sectors.length}
-                    hint={
-                      Object.keys(targets).length > 0
-                        ? `${Object.keys(targets).length} ${locale === 'fr' ? 'cible(s) definie(s)' : 'target(s) set'}`
-                        : locale === 'fr'
-                          ? 'Aucune cible definie'
-                          : 'No targets set'
-                    }
-                    icon={<Target className="size-3.5" />}
-                  />
+                  {/* Dividendes YTD — replaces the old Sectors count
+                     KPI which was redundant with the pie chart below.
+                     Sums all dividend payments since Jan 1, converted
+                     to display currency via overview.fxUsdToCad.
+                     Shows 0 when none yet — discoverable feature
+                     pointer even on a fresh install. */}
+                  {(() => {
+                    const yearStart = new Date(
+                      new Date().getFullYear(),
+                      0,
+                      1,
+                    )
+                      .toISOString()
+                      .slice(0, 10)
+                    const ytdTotal = dividends
+                      .filter((d) => d.paidAt >= yearStart)
+                      .reduce((acc, d) => {
+                        // Convert each payment into the display currency.
+                        let v = d.amount
+                        if (
+                          d.currency !== overview.displayCurrency
+                        ) {
+                          if (
+                            d.currency === 'USD' &&
+                            overview.displayCurrency === 'CAD'
+                          ) {
+                            v *= overview.fxUsdToCad
+                          } else if (
+                            d.currency === 'CAD' &&
+                            overview.displayCurrency === 'USD'
+                          ) {
+                            v /= overview.fxUsdToCad
+                          }
+                        }
+                        return acc + v
+                      }, 0)
+                    return (
+                      <KpiCard
+                        title={
+                          locale === 'fr'
+                            ? 'Dividendes annee en cours'
+                            : 'Dividends YTD'
+                        }
+                        value={formatMoney(
+                          ytdTotal,
+                          overview.displayCurrency,
+                          lc,
+                        )}
+                        hint={
+                          dividends.length === 0
+                            ? locale === 'fr'
+                              ? 'Importe un broker pour les capturer'
+                              : 'Import a broker to capture them'
+                            : `${dividends.length} ${locale === 'fr' ? 'paiement(s) total' : 'payment(s) lifetime'}`
+                        }
+                        icon={<Coins className="size-3.5" />}
+                      />
+                    )
+                  })()}
                 </div>
 
                 {noCachedQuotes && (

@@ -326,8 +326,8 @@ const dict: Dict = {
   'import.questradeButton': { fr: 'Importer Questrade', en: 'Import Questrade' },
   'import.questradeBusy': { fr: 'Import en cours…', en: 'Importing…' },
   'import.summary': {
-    fr: '{imported} transactions importees · {skippedNonTrade} non-trades ignorees · {skippedInvalid} invalides',
-    en: '{imported} trades imported · {skippedNonTrade} non-trades skipped · {skippedInvalid} invalid',
+    fr: '{imported} nouvelles transactions · {existingTrades} déjà connues · {dividendsImported} dividendes · {skippedInvalid} invalides',
+    en: '{imported} new trades · {existingTrades} already imported · {dividendsImported} dividends · {skippedInvalid} invalid',
   },
   'import.newTickers': {
     fr: '{n} nouveaux tickers ajoutes : {list}',
