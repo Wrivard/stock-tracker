@@ -8,6 +8,7 @@ import {
   LineChart,
   Newspaper,
   Settings as SettingsIcon,
+  Sparkles,
   Target,
   Wallet,
 } from 'lucide-react'
@@ -36,6 +37,7 @@ const NAV: NavItem[] = [
   { href: '/history', labelKey: 'nav.history', icon: LineChart },
   { href: '/rebalance', labelKey: 'nav.rebalance', icon: Target },
   { href: '/news', labelKey: 'nav.news', icon: Newspaper },
+  { href: '/assistant', labelKey: 'nav.assistant', icon: Sparkles },
   { href: '/settings', labelKey: 'nav.settings', icon: SettingsIcon },
 ]
 

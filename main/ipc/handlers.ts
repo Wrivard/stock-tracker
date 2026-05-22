@@ -24,6 +24,7 @@ import * as portfolio from '../services/portfolio'
 import * as timeseries from '../services/timeseries'
 import * as snapshots from '../services/snapshots'
 import * as backup from '../services/backup'
+import { answerPortfolioQuestion } from '../services/ai/portfolio-qa'
 import { summarizePortfolioWeek } from '../services/ai/recap'
 import { importQuestradeXlsx } from '../services/import-questrade'
 import { getApiKey, setApiKey } from '../services/settings-keys'
@@ -383,6 +384,25 @@ export function registerIpcHandlers(): void {
       return deduped(`ai:newsRecap:${parsedLocale}:${parsedDays}`, () =>
         summarizePortfolioWeek(parsedLocale, parsedDays),
       )
+    }),
+  )
+
+  ipcMain.handle(
+    IPC.ai.portfolioChat,
+    wrap((history: unknown, locale: unknown) => {
+      const parsedHistory = z
+        .array(
+          z.object({
+            role: z.enum(['user', 'assistant']),
+            content: z.string().min(1).max(2000),
+          }),
+        )
+        .max(20)
+        .parse(history)
+      const parsedLocale = Locale.optional().parse(locale) ?? 'fr'
+      // No dedup here — every Q&A message must produce a separate
+      // call (each one has a different history payload anyway).
+      return answerPortfolioQuestion(parsedHistory, parsedLocale)
     }),
   )
 

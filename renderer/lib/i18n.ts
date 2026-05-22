@@ -9,6 +9,7 @@ const dict: Dict = {
   'nav.history': { fr: 'Historique', en: 'History' },
   'nav.rebalance': { fr: 'Reequilibrage', en: 'Rebalance' },
   'nav.news': { fr: 'Actualites', en: 'News' },
+  'nav.assistant': { fr: 'Assistant IA', en: 'AI assistant' },
   'nav.settings': { fr: 'Parametres', en: 'Settings' },
 
   'common.refresh': { fr: 'Actualiser', en: 'Refresh' },
@@ -248,6 +249,43 @@ const dict: Dict = {
   'accounts.kind.resp': { fr: 'REEE / RESP', en: 'RESP' },
   'accounts.kind.taxable': { fr: 'Non-enregistre', en: 'Taxable' },
   'accounts.kind.other': { fr: 'Autre', en: 'Other' },
+
+  'assistant.title': { fr: 'Assistant IA', en: 'AI assistant' },
+  'assistant.subtitle': {
+    fr: "Pose des questions sur ton portefeuille. L'IA voit tes positions, secteurs, transactions recentes et dividendes. Aucun conseil d'achat/vente.",
+    en: 'Ask questions about your portfolio. The AI sees your positions, sectors, recent trades, and dividends. No buy/sell advice.',
+  },
+  'assistant.noKey': {
+    fr: 'Cle OpenAI manquante. Configure-la dans Parametres pour activer l\'assistant.',
+    en: 'OpenAI key missing. Set it in Settings to enable the assistant.',
+  },
+  'assistant.placeholder': {
+    fr: 'Pose une question sur ton portefeuille…',
+    en: 'Ask a question about your portfolio…',
+  },
+  'assistant.send': { fr: 'Envoyer', en: 'Send' },
+  'assistant.thinking': { fr: 'Reflexion…', en: 'Thinking…' },
+  'assistant.empty': {
+    fr: 'Aucune conversation. Essaie une question pour commencer.',
+    en: 'No conversation yet. Try a question to get started.',
+  },
+  'assistant.clear': { fr: 'Effacer', en: 'Clear' },
+  'assistant.suggestion1': {
+    fr: 'Quels tickers contribuent le plus a ma performance ?',
+    en: 'Which positions drive the most of my performance?',
+  },
+  'assistant.suggestion2': {
+    fr: 'Mon allocation par secteur est-elle equilibree ?',
+    en: 'Is my sector allocation balanced?',
+  },
+  'assistant.suggestion3': {
+    fr: 'Resume mon portefeuille en 3 phrases.',
+    en: 'Summarize my portfolio in 3 sentences.',
+  },
+  'assistant.disclaimer': {
+    fr: "L'IA peut se tromper. Ne suit pas aveuglement — verifie toujours les chiffres importants.",
+    en: 'AI can be wrong. Never trust blindly — always verify important figures.',
+  },
 
   'dividends.title': { fr: 'Dividendes', en: 'Dividends' },
   'dividends.subtitle': {

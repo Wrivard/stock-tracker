@@ -76,6 +76,7 @@ export const IPC = {
   },
   ai: {
     newsRecap: 'ai:newsRecap',
+    portfolioChat: 'ai:portfolioChat',
   },
   importBroker: {
     questrade: 'import:questrade',
