@@ -35,7 +35,7 @@ export async function fetchFxRate(from: Currency, to: Currency): Promise<FxRate>
   }
   await frankfurterBucket.take(1)
   const url = `${BASE}/latest?base=${from}&symbols=${to}`
-  const res = await fetch(url)
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (res.status === 429)
     throw fail('rate_limit', 'Frankfurter rate limit hit', 429)
   if (!res.ok) throw fail('unknown', `Frankfurter HTTP ${res.status}`, res.status)

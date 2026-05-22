@@ -68,6 +68,18 @@ const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    // v2 — index api_cache.expires_at so the periodic cleanup and
+    // the boot-time scan don't full-table-scan once the cache has
+    // accumulated tens of thousands of rows after a few months of
+    // daily refresh. Idempotent: IF NOT EXISTS guards against re-run
+    // if a future migration somehow lands twice.
+    version: 2,
+    up: `
+      CREATE INDEX IF NOT EXISTS idx_api_cache_expires
+        ON api_cache(expires_at);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

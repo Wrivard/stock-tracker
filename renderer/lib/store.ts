@@ -110,8 +110,15 @@ export const useUi = create<UiState>((set) => ({
   },
 
   setRefreshIntervalSec: async (s) => {
-    set({ refreshIntervalSec: s })
-    await api().settings.set('app.refreshIntervalSec', String(s))
+    set((state) => ({ ...state, refreshIntervalSec: s }))
+    try {
+      await api().settings.set('app.refreshIntervalSec', String(s))
+    } catch (err) {
+      // Mirror setDisplayCurrency / setLocale: surface persistence
+      // failure to the console but keep the in-memory state so the
+      // UI doesn't visibly snap back.
+      console.error('[store] persisting refreshIntervalSec failed:', err)
+    }
   },
 
   refreshApiKeyStatus: async () => {

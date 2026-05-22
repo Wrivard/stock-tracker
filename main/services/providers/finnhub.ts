@@ -32,7 +32,7 @@ function requireKey(): string {
 async function get<T>(pathQuery: string): Promise<T> {
   await finnhubBucket.take(1)
   const url = `${BASE}${pathQuery}`
-  const res = await fetch(url)
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (res.status === 429) throw fail('rate_limit', 'Finnhub rate limit hit', 429)
   if (res.status === 401 || res.status === 403)
     throw fail('unauthorized', `Finnhub auth failed (${res.status})`, res.status)

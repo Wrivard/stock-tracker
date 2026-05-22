@@ -84,7 +84,7 @@ export async function fetchQuote(symbol: string): Promise<Quote> {
   const td = symbolForTwelveData(symbol)
   await twelvedataBucket.take(1)
   const url = `${BASE}/quote?symbol=${encodeURIComponent(td)}&apikey=${key}`
-  const res = await fetch(url)
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (res.status === 429) throw fail('rate_limit', 'Twelve Data rate limit hit', 429)
   if (!res.ok) throw fail('unknown', `Twelve Data HTTP ${res.status}`, res.status)
   const data = (await res.json()) as TwelveDataQuoteResponse
@@ -134,7 +134,7 @@ export async function fetchDailyHistory(
   const size = PERIOD_TO_SIZE[period]
   await twelvedataBucket.take(1)
   const url = `${BASE}/time_series?symbol=${encodeURIComponent(td)}&interval=1day&outputsize=${size}&apikey=${key}`
-  const res = await fetch(url)
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (res.status === 429)
     throw fail('rate_limit', 'Twelve Data rate limit hit', 429)
   if (!res.ok) throw fail('unknown', `Twelve Data HTTP ${res.status}`, res.status)

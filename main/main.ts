@@ -191,6 +191,27 @@ function bindLocalShortcuts(win: BrowserWindow) {
       log('cache cleanup failed', err instanceof Error ? err : { err: String(err) })
     }
 
+    // Long-running sessions (laptop closed for days, app left open)
+    // would otherwise never re-trigger cleanupExpiredCache after boot,
+    // letting api_cache grow without bound. Every 6 hours is harmless;
+    // the operation is a single DELETE WHERE expires_at < ? on an
+    // indexed column.
+    const cleanupTimer = setInterval(
+      () => {
+        try {
+          const purged = cleanupExpiredCache()
+          if (purged.deleted > 0) log('periodic cache cleanup', purged)
+        } catch (err) {
+          log(
+            'periodic cache cleanup failed',
+            err instanceof Error ? err : { err: String(err) },
+          )
+        }
+      },
+      6 * 3600_000,
+    )
+    app.once('before-quit', () => clearInterval(cleanupTimer))
+
     // Pre-warm USD<->CAD on boot. Without a fresh FX row in the cache,
     // portfolio.ts/timeseries.ts silently fall back to rate=1 and the
     // CAD/USD display toggle appears to do nothing (every USD value

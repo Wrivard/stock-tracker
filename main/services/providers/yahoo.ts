@@ -101,7 +101,13 @@ function mapTypeForQuote(t: string | undefined): Quote['quoteType'] {
 export async function fetchQuote(symbol: string): Promise<Quote> {
   await yahooBucket.take(1)
   const url = `${BASE}/${encodeURIComponent(symbol)}?interval=1d&range=1d`
-  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
+  // 10s timeout — Yahoo's unofficial endpoints occasionally hang for
+  // 60+ seconds before TCP-timing out, which would block refreshAll's
+  // sequential loop indefinitely on a 20-ticker portfolio.
+  const res = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT },
+    signal: AbortSignal.timeout(10_000),
+  })
   if (res.status === 429) throw fail('rate_limit', 'Yahoo rate limit hit', 429)
   if (res.status === 401 || res.status === 403)
     throw fail('unauthorized', `Yahoo auth failed (${res.status})`, res.status)
@@ -180,7 +186,13 @@ export async function fetchDailyHistory(
   await yahooBucket.take(1)
   const range = PERIOD_TO_RANGE[period]
   const url = `${BASE}/${encodeURIComponent(symbol)}?interval=1d&range=${range}`
-  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
+  // 10s timeout — Yahoo's unofficial endpoints occasionally hang for
+  // 60+ seconds before TCP-timing out, which would block refreshAll's
+  // sequential loop indefinitely on a 20-ticker portfolio.
+  const res = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT },
+    signal: AbortSignal.timeout(10_000),
+  })
   if (res.status === 429) throw fail('rate_limit', 'Yahoo rate limit hit', 429)
   if (res.status === 401 || res.status === 403)
     throw fail('unauthorized', `Yahoo auth failed (${res.status})`, res.status)

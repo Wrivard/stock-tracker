@@ -1,6 +1,6 @@
 import Head from 'next/head'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ExternalLink, Newspaper, RefreshCw, Sparkles } from 'lucide-react'
 
@@ -113,11 +113,21 @@ export default function NewsPage() {
     }
   }
 
+  // Track the dialog open state at fire time so we can ignore the
+  // OpenAI response if the user closed the dialog mid-flight. The
+  // OpenAI call already started — we can't actually cancel the
+  // network request from here (no AbortController exposed by the
+  // IPC) — but we can at least avoid stomping `recap` and avoid
+  // the unnecessary re-render. Cost still lands on the user's
+  // OpenAI account; that's a backend-side fix to expose abort.
+  const recapInFlightRef = useRef(false)
   async function handleRecap() {
     if (!apiKeyStatus.openai) {
       toast.error(t('news.recapNoKey'))
       return
     }
+    if (recapInFlightRef.current) return
+    recapInFlightRef.current = true
     // Reset the previous result IMMEDIATELY so the dialog opens in a
     // loading state instead of flashing the stale recap from the last
     // click. Setting recap=null is what the dialog reads to switch into
@@ -127,13 +137,22 @@ export default function NewsPage() {
     setRecapBusy(true)
     try {
       const result = await api().ai.newsRecap(locale, 7)
-      setRecap(result)
+      // If the dialog was closed while we awaited, drop the result —
+      // re-opening shouldn't surface a stale recap from an old click.
+      if (recapInFlightRef.current) setRecap(result)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setRecapBusy(false)
+      recapInFlightRef.current = false
     }
   }
+
+  // Sync the ref with dialog state — closing the dialog flips the
+  // in-flight guard so the pending await won't write back to state.
+  useEffect(() => {
+    if (!recapOpen) recapInFlightRef.current = false
+  }, [recapOpen])
 
   // Refresh inside the empty-state Recap dialog. Same code path as the
   // header button: warm quotes + news, bump tickers so all pages reload,

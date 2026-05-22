@@ -60,38 +60,63 @@ export default function HomePage() {
     if (!initialized) return
     let cancelled = false
     setLoading(true)
-    Promise.all([
+    // Promise.allSettled instead of Promise.all so a single failing
+    // IPC (e.g. cold portfolio.overview) doesn't blank the whole
+    // dashboard. Each source is consumed independently and any
+    // rejection surfaces as a single toast at the end rather than
+    // a console-only silent break.
+    void Promise.allSettled([
       api().portfolio.overview(displayCurrency),
       api().snapshots.list(),
       api().transactions.list(),
-      api()
-        .market.portfolioNews({ cachedOnly: true })
-        .catch(() => ({ items: [], errors: {} })),
+      api().market.portfolioNews({ cachedOnly: true }),
       api().settings.list(),
     ])
-      .then(([ov, snaps, txs, n, settings]) => {
+      .then((results) => {
         if (cancelled) return
-        setOverview(ov)
-        setSnapshots(snaps)
-        setRecentTx(txs.slice(0, 5))
-        setNews(n.items.slice(0, 5))
-        const tgts: Record<string, number> = {}
-        for (const s of settings as Setting[]) {
-          if (s.key.startsWith('targets.')) {
-            const v = Number(s.value)
-            if (Number.isFinite(v)) tgts[s.key.slice('targets.'.length)] = v
+        const [ov, snaps, txs, news, settings] = results
+        if (ov.status === 'fulfilled') setOverview(ov.value)
+        if (snaps.status === 'fulfilled') setSnapshots(snaps.value)
+        if (txs.status === 'fulfilled') setRecentTx(txs.value.slice(0, 5))
+        if (news.status === 'fulfilled') setNews(news.value.items.slice(0, 5))
+        if (settings.status === 'fulfilled') {
+          const tgts: Record<string, number> = {}
+          for (const s of settings.value as Setting[]) {
+            if (s.key.startsWith('targets.')) {
+              const v = Number(s.value)
+              if (Number.isFinite(v)) tgts[s.key.slice('targets.'.length)] = v
+            }
           }
+          setTargets(tgts)
         }
-        setTargets(tgts)
+        // Aggregate failures into a single toast so we never spam
+        // multiple errors at once. The overview is the most critical
+        // — if it fails, surface a louder error.
+        const failures = results
+          .map((r, i) => (r.status === 'rejected' ? i : -1))
+          .filter((i) => i >= 0)
+        if (failures.length > 0) {
+          const firstError = results.find(
+            (r) => r.status === 'rejected',
+          ) as PromiseRejectedResult | undefined
+          if (ov.status === 'rejected') {
+            toast.error(
+              locale === 'fr'
+                ? 'Echec du chargement du tableau de bord.'
+                : 'Dashboard load failed.',
+              { id: 'dashboard-load' },
+            )
+          }
+          console.warn('dashboard partial load', failures, firstError?.reason)
+        }
       })
-      .catch((err: Error) => console.error('dashboard load', err))
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [displayCurrency, refreshTick, dataTick, initialized])
+  }, [displayCurrency, refreshTick, dataTick, initialized, locale])
 
   const lc = locale === 'fr' ? 'fr-CA' : 'en-CA'
   const isEmpty = overview && overview.positions.length === 0

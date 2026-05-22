@@ -58,6 +58,25 @@ const BypassSchema = z.object({ bypass: z.boolean().optional() }).optional()
 
 type AnyHandler = (...args: never[]) => unknown
 
+// In-flight de-dup for expensive handlers. Used so that a double-click
+// on the refresh button (or an interval tick colliding with a manual
+// press) doesn't trigger TWO parallel passes that would each blow N
+// provider calls AND, for newsRecap specifically, BILL the user's
+// OpenAI account twice for the same content. The promise is registered
+// under a stable key (typically the handler name) and removed when it
+// settles. Callers receive the SAME in-flight promise on a second call,
+// so both UI sites observe the same result/error without duplicating
+// the underlying work.
+const inFlight = new Map<string, Promise<unknown>>()
+
+function deduped<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const existing = inFlight.get(key)
+  if (existing) return existing as Promise<T>
+  const p = run().finally(() => inFlight.delete(key))
+  inFlight.set(key, p)
+  return p
+}
+
 // Minimal semver-ish comparator for the updater. Returns -1/0/1 the way
 // Array.prototype.sort expects, comparing the dotted numeric parts only.
 // Anything past the third segment (pre-release tags, etc.) is ignored —
@@ -205,7 +224,11 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(
     IPC.market.refreshAll,
-    wrap((opts: unknown) => market.refreshAll(BypassSchema.parse(opts))),
+    wrap((opts: unknown) =>
+      deduped('market:refreshAll', () =>
+        market.refreshAll(BypassSchema.parse(opts)),
+      ),
+    ),
   )
   ipcMain.handle(IPC.market.status, wrap(() => market.getCacheStatus()))
   ipcMain.handle(
@@ -261,15 +284,30 @@ export function registerIpcHandlers(): void {
     wrap((locale: unknown, days: unknown) => {
       const parsedLocale = Locale.optional().parse(locale) ?? 'fr'
       const parsedDays = z.number().int().min(1).max(30).optional().parse(days) ?? 7
-      return summarizePortfolioWeek(parsedLocale, parsedDays)
+      // Key includes locale+days so an EN+14d recap doesn't collide
+      // with an FR+7d one, but two FR+7d clicks share one OpenAI call.
+      return deduped(`ai:newsRecap:${parsedLocale}:${parsedDays}`, () =>
+        summarizePortfolioWeek(parsedLocale, parsedDays),
+      )
     }),
   )
 
   ipcMain.handle(
     IPC.shell.openExternal,
     wrap(async (url: string) => {
-      const safe = z.string().url().startsWith('http').parse(url)
-      await shell.openExternal(safe)
+      // The previous validator (`startsWith('http')`) accepted any
+      // URL starting with the literal "http" substring — including
+      // "http://attacker.tld" and theoretically "httpfoo://..." after
+      // Zod normalized it. Tighten to: must parse as a URL AND use
+      // the https: protocol. Yahoo/Finnhub all serve their news links
+      // as https; there is no legitimate http:// path here. Anything
+      // else gets dropped before reaching shell.openExternal.
+      const parsed = z.string().url().parse(url)
+      const u = new URL(parsed)
+      if (u.protocol !== 'https:') {
+        throw new Error(`Refused to open non-https URL: ${u.protocol}`)
+      }
+      await shell.openExternal(u.toString())
     }),
   )
 

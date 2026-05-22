@@ -75,14 +75,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
     const unsubscribe = window.api.updater.onDownloaded(({ version }) => {
       if (seenVersionRef.current === version) return
       seenVersionRef.current = version
+      // Read locale at toast-fire time from the Zustand store rather
+      // than capturing it in the effect closure. Without this, every
+      // language flip tore down + re-attached the IPC listener — and
+      // worse, an in-flight download whose event fired between flips
+      // could fire the toast in the wrong language. getState() is
+      // synchronous and stable.
+      const currentLocale = useUi.getState().locale
       toast(
-        locale === 'fr'
+        currentLocale === 'fr'
           ? `Version ${version} prete a installer`
           : `Version ${version} ready to install`,
         {
           duration: Infinity,
           action: {
-            label: locale === 'fr' ? 'Redemarrer' : 'Restart',
+            label: currentLocale === 'fr' ? 'Redemarrer' : 'Restart',
             onClick: () => {
               void window.api.updater.quitAndInstall()
             },
@@ -91,7 +98,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       )
     })
     return unsubscribe
-  }, [locale])
+  }, [])
 
   // Ctrl/Cmd+N opens the Quick Trade dialog from anywhere. We deliberately
   // skip when the user is typing in an input/select so we don't hijack

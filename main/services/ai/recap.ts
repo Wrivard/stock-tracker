@@ -27,21 +27,31 @@ export async function summarizePortfolioWeek(
   const articles: Array<{ ticker: string; date: string; source: string; headline: string }> = []
   const seenTickers = new Set<string>()
 
+  // Per-ticker cap on what we send to the LLM. With a large portfolio
+  // each ticker can carry 10+ cached articles in the window; sending
+  // them all bills the user linearly per-token without proportionally
+  // improving the recap quality (the model rarely needs more than a
+  // handful of headlines per name to write a 2-3 line summary). 5
+  // most-recent per ticker keeps the prompt bounded at ~tickerCount*5
+  // articles while still surfacing every owned ticker.
+  const PER_TICKER_CAP = 5
   for (const t of tickers) {
     const cached = readRaw<NewsItem[]>(`news:${t.symbol}`)
     if (!cached?.data) continue
-    let hasAny = false
-    for (const n of cached.data) {
-      if (n.publishedAt < cutoff) continue
+    const inWindow = cached.data
+      .filter((n) => n.publishedAt >= cutoff)
+      .sort((a, b) => b.publishedAt - a.publishedAt)
+      .slice(0, PER_TICKER_CAP)
+    if (inWindow.length === 0) continue
+    seenTickers.add(t.symbol)
+    for (const n of inWindow) {
       articles.push({
         ticker: t.symbol,
         date: new Date(n.publishedAt).toISOString().slice(0, 10),
         source: n.source,
         headline: n.headline,
       })
-      hasAny = true
     }
-    if (hasAny) seenTickers.add(t.symbol)
   }
 
   // Group + format compactly. Markdown is fine — the model can read it

@@ -26,6 +26,14 @@ function readCache<T>(key: string): { data: T; fetchedAt: number; expiresAt: num
       expiresAt: row.expires_at,
     }
   } catch {
+    // Corrupt payload — delete the row so the next withCache hit
+    // re-fetches cleanly instead of silently falling back to whatever
+    // the staleFallback branch decides. The hit was a miss anyway.
+    try {
+      getDb().prepare('DELETE FROM api_cache WHERE key = ?').run(key)
+    } catch {
+      // Connection might be torn down during shutdown; ignore.
+    }
     return null
   }
 }

@@ -110,24 +110,33 @@ export default function TickerPage() {
     if (!initialized || !symbol) return
     let cancelled = false
     setLoading(true)
-    Promise.all([
+    // Promise.allSettled so a single rejection (e.g. portfolio.overview
+    // failing on an empty FX cache) doesn't blank the whole ticker
+    // page. Sources that already had .catch(() => null) keep the
+    // graceful-degrade behavior; the two without (overview, txs,
+    // sectors) now do too via the per-source result handling below.
+    void Promise.allSettled([
       api().portfolio.overview(displayCurrency),
-      api().market.profile(symbol).catch(() => null),
-      api().market.history(symbol, period).catch(() => null),
-      api().market.news(symbol).catch(() => null),
+      api().market.profile(symbol),
+      api().market.history(symbol, period),
+      api().market.news(symbol),
       api().transactions.list({ ticker: symbol }),
       api().sectors.list(),
-      api().market.etfDetails(symbol).catch(() => null),
+      api().market.etfDetails(symbol),
     ])
-      .then(([ov, prof, hist, n, txs, secs, etf]) => {
+      .then((results) => {
         if (cancelled) return
-        setOverview(ov)
-        setProfile(prof)
-        setHistory(hist)
-        setNews(n)
-        setTransactions(txs)
-        setSectors(secs)
-        setEtfDetails(etf)
+        const [ov, prof, hist, n, txs, secs, etf] = results
+        if (ov.status === 'fulfilled') setOverview(ov.value)
+        setProfile(prof.status === 'fulfilled' ? prof.value : null)
+        setHistory(hist.status === 'fulfilled' ? hist.value : null)
+        setNews(n.status === 'fulfilled' ? n.value : null)
+        if (txs.status === 'fulfilled') setTransactions(txs.value)
+        if (secs.status === 'fulfilled') setSectors(secs.value)
+        setEtfDetails(etf.status === 'fulfilled' ? etf.value : null)
+        if (ov.status === 'rejected') {
+          console.warn('ticker overview failed', ov.reason)
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
