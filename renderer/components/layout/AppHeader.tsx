@@ -1,11 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
-import { Moon, Plus, RefreshCw, Sun, UserCircle2 } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  Moon,
+  Plus,
+  RefreshCw,
+  Sun,
+  UserCircle2,
+} from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useUi } from '@/lib/store'
 import { useT, formatRelativeTime } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -259,13 +268,29 @@ function ProfilePicker({ locale }: { locale: 'fr' | 'en' }) {
   }, [initialized, dataTick])
 
   const active = profiles.find((p) => p.id === activeProfileId)
+  const [open, setOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
 
-  function handleChange(v: string) {
-    const id = Number(v)
-    if (Number.isFinite(id) && id > 0) {
-      void setActiveProfileId(id)
+  // Click-outside + Escape to close. Without Radix's portalled
+  // dropdown we wire these ourselves.
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(e: PointerEvent) {
+      if (!wrapperRef.current) return
+      if (!wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
     }
-  }
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeydown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeydown)
+    }
+  }, [open])
 
   async function handleCreate() {
     const name = newName.trim()
@@ -290,42 +315,69 @@ function ProfilePicker({ locale }: { locale: 'fr' | 'en' }) {
 
   return (
     <>
-      {/* Two-control layout: a profile-only Select + a dedicated
-          "+ create" Button. Bundling the create affordance inside
-          the Select as a sentinel item confused Radix — controlled
-          value vs. internal selection state ended up disagreeing,
-          so the dropdown stopped responding to clicks after the
-          first interaction. Splitting them keeps both behaviors
-          stable. */}
-      <Select
-        // key on the active id forces a remount when the store value
-        // changes — same defensive pattern as the currency Select.
-        key={String(activeProfileId)}
-        value={String(activeProfileId)}
-        onValueChange={handleChange}
-      >
-        <SelectTrigger
-          className="h-8 max-w-[180px] text-xs gap-1"
+      {/* Custom dropdown — bypasses Radix Select entirely. Two
+          previous Select-based attempts had the dropdown failing to
+          respond after the first click (controlled-value desync vs.
+          Radix internal selection state). A plain button + an
+          absolutely-positioned div is dumb but it works deterministic-
+          ally. The Plus button next to it opens the create dialog. */}
+      <div ref={wrapperRef} className="relative">
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="h-8 max-w-[180px] text-xs gap-1.5 font-normal"
           aria-label="profile"
+          aria-expanded={open}
+          aria-haspopup="menu"
         >
           <UserCircle2 className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">
             {active?.name ?? (locale === 'fr' ? 'Profil' : 'Profile')}
           </span>
-        </SelectTrigger>
-        <SelectContent>
-          {profiles.length === 0 && (
-            <div className="px-2 py-1.5 text-xs text-muted-foreground">
-              …
-            </div>
-          )}
-          {profiles.map((p) => (
-            <SelectItem key={p.id} value={String(p.id)}>
-              {p.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+          <ChevronDown className="size-3 shrink-0 opacity-60" />
+        </Button>
+        {open && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full mt-1 min-w-[180px] rounded-md border border-border bg-popover shadow-md z-50 py-1 max-h-64 overflow-y-auto"
+          >
+            {profiles.length === 0 && (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                …
+              </div>
+            )}
+            {profiles.map((p) => (
+              <button
+                key={p.id}
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  if (p.id !== activeProfileId) {
+                    void setActiveProfileId(p.id)
+                  }
+                }}
+                className={cn(
+                  'flex w-full items-center gap-2 px-2 py-1.5 text-xs text-left hover:bg-accent hover:text-accent-foreground transition-colors',
+                  p.id === activeProfileId && 'font-medium',
+                )}
+              >
+                <Check
+                  className={cn(
+                    'size-3.5 shrink-0',
+                    p.id === activeProfileId
+                      ? 'text-primary'
+                      : 'opacity-0',
+                  )}
+                />
+                <span className="truncate">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
