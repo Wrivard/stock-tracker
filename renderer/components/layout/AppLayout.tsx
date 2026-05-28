@@ -10,7 +10,6 @@ import {
   Settings as SettingsIcon,
   Sparkles,
   Target,
-  UserCircle2,
   Wallet,
 } from 'lucide-react'
 
@@ -172,7 +171,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
             )
           })}
         </nav>
-        <ProfileSwitcher locale={locale} />
+        {/* Profile switcher used to live here in v0.1.33 but the
+            user asked for it in the AppHeader next to the currency
+            picker (v0.1.34). It's now rendered there with an
+            integrated "+ Nouveau profil" affordance. */}
         <div className="px-4 py-3 text-[11px] text-sidebar-foreground/40 border-t border-sidebar-border tabular-nums">
           {appVersion ? `v${appVersion}` : 'v…'} · local-only
         </div>
@@ -192,70 +194,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
   )
 }
 
-// Profile picker rendered above the version footer in the sidebar.
-// Lists every profile and lets the user switch with a single click.
-// Defaults are loaded on first render; the picker re-fetches when
-// dataTick bumps (so adding/removing a profile from Settings shows
-// up immediately).
-function ProfileSwitcher({ locale }: { locale: 'fr' | 'en' }) {
-  const initialized = useUi((s) => s.initialized)
-  const dataTick = useUi((s) => s.dataTick)
-  const activeProfileId = useUi((s) => s.activeProfileId)
-  const setActiveProfileId = useUi((s) => s.setActiveProfileId)
-  const [profiles, setProfiles] = useState<
-    Array<{ id: number; name: string }>
-  >([])
-
-  useEffect(() => {
-    if (!initialized) return
-    let cancelled = false
-    api()
-      .profiles.list()
-      .then((p) => {
-        if (cancelled) return
-        setProfiles(p)
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [initialized, dataTick])
-
-  // Hide the switcher entirely when there's only one profile — it's
-  // just clutter until the user actually creates a second one (e.g.
-  // for their partner). Show as soon as 2+ exist.
-  if (profiles.length < 2) return null
-  const active = profiles.find((p) => p.id === activeProfileId)
-  return (
-    <div className="px-2 py-2 border-t border-sidebar-border">
-      <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-2 mb-1">
-        {locale === 'fr' ? 'Profil' : 'Profile'}
-      </div>
-      <div className="flex flex-col gap-0.5">
-        {profiles.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => void setActiveProfileId(p.id)}
-            className={cn(
-              'flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[12px] text-left transition-colors',
-              p.id === active?.id
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60',
-            )}
-          >
-            <UserCircle2
-              className={cn(
-                'size-3.5 shrink-0',
-                p.id === active?.id
-                  ? 'text-primary'
-                  : 'text-sidebar-foreground/60',
-              )}
-            />
-            <span className="truncate">{p.name}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}

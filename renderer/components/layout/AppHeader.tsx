@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
-import { Moon, Plus, RefreshCw, Sun } from 'lucide-react'
+import { Moon, Plus, RefreshCw, Sun, UserCircle2 } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useUi } from '@/lib/store'
@@ -11,10 +11,20 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Tooltip,
   TooltipContent,
@@ -125,6 +135,8 @@ export function AppHeader() {
           </Badge>
         )}
 
+        <ProfilePicker locale={locale} />
+
         <Select
           // key={displayCurrency} forces React to unmount/remount the
           // Select whenever the store's currency changes. Belt-and-
@@ -211,5 +223,152 @@ export function AppHeader() {
         </Tooltip>
       </header>
     </TooltipProvider>
+  )
+}
+
+// Header-level profile picker. Lives next to the currency Select.
+// Closing-action item at the bottom of the dropdown opens a small
+// "create new" dialog. Hidden in the < 2 profiles case ONLY if the
+// "Create" affordance would otherwise be the only visible item —
+// we still want the picker visible to surface the feature.
+function ProfilePicker({ locale }: { locale: 'fr' | 'en' }) {
+  const initialized = useUi((s) => s.initialized)
+  const dataTick = useUi((s) => s.dataTick)
+  const activeProfileId = useUi((s) => s.activeProfileId)
+  const setActiveProfileId = useUi((s) => s.setActiveProfileId)
+  const bumpData = useUi((s) => s.bumpData)
+  const [profiles, setProfiles] = useState<
+    Array<{ id: number; name: string }>
+  >([])
+  const [createOpen, setCreateOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    if (!initialized) return
+    let cancelled = false
+    api()
+      .profiles.list()
+      .then((p) => {
+        if (cancelled) return
+        setProfiles(p)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [initialized, dataTick])
+
+  // Sentinel value used by the Select onValueChange to fire the
+  // create dialog instead of selecting a real profile id.
+  const NEW = '__new__'
+
+  const active = profiles.find((p) => p.id === activeProfileId)
+
+  function handleChange(v: string) {
+    if (v === NEW) {
+      setCreateOpen(true)
+      return
+    }
+    const id = Number(v)
+    if (Number.isFinite(id) && id > 0) {
+      void setActiveProfileId(id)
+    }
+  }
+
+  async function handleCreate() {
+    const name = newName.trim()
+    if (!name) return
+    setCreating(true)
+    try {
+      const created = await api().profiles.create({ name })
+      // Refresh local list + switch to the new profile immediately so
+      // the user lands on an empty dashboard ready to import.
+      const next = await api().profiles.list()
+      setProfiles(next)
+      await setActiveProfileId(created.id)
+      bumpData()
+      setNewName('')
+      setCreateOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <>
+      <Select
+        // key on the active id forces a remount when the store value
+        // changes — same defensive pattern as the currency Select.
+        key={String(activeProfileId)}
+        value={String(activeProfileId)}
+        onValueChange={handleChange}
+      >
+        <SelectTrigger
+          className="h-8 max-w-[180px] text-xs gap-1"
+          aria-label="profile"
+        >
+          <UserCircle2 className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">
+            {active?.name ?? (locale === 'fr' ? 'Profil' : 'Profile')}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          {profiles.map((p) => (
+            <SelectItem key={p.id} value={String(p.id)}>
+              {p.name}
+            </SelectItem>
+          ))}
+          <SelectSeparator />
+          <SelectItem value={NEW} className="text-primary">
+            <Plus className="size-3.5" />
+            {locale === 'fr' ? 'Nouveau profil' : 'New profile'}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {locale === 'fr' ? 'Nouveau profil' : 'New profile'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-name">
+              {locale === 'fr' ? 'Nom du profil' : 'Profile name'}
+            </Label>
+            <Input
+              id="profile-name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={
+                locale === 'fr'
+                  ? 'ex. Placements de ma copine'
+                  : "e.g. My partner's portfolio"
+              }
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleCreate()
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateOpen(false)}
+              disabled={creating}
+            >
+              {locale === 'fr' ? 'Annuler' : 'Cancel'}
+            </Button>
+            <Button onClick={handleCreate} disabled={creating || !newName.trim()}>
+              {creating ? '…' : locale === 'fr' ? 'Creer' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
