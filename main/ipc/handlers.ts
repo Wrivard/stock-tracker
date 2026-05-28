@@ -15,6 +15,7 @@ import { IPC } from './channels'
 import * as accountsRepo from '../db/repo/accounts'
 import * as dividendsRepo from '../db/repo/dividends'
 import * as holdingsRepo from '../db/repo/holdings'
+import * as profilesRepo from '../db/repo/profiles'
 import * as sectorsRepo from '../db/repo/sectors'
 import * as settingsRepo from '../db/repo/settings'
 import * as tickersRepo from '../db/repo/tickers'
@@ -49,6 +50,12 @@ const AccountInputSchema = z.object({
   kind: AccountKind,
   brokerAccountNumber: z.string().max(40).nullable().optional(),
   defaultCurrency: Currency.nullable().optional(),
+  profileId: z.number().int().positive().optional(),
+})
+
+const ProfileInputSchema = z.object({
+  name: z.string().min(1).max(60),
+  color: z.string().max(20).nullable().optional(),
 })
 
 const DividendKind = z.enum(['dividend', 'interest', 'distribution'])
@@ -199,7 +206,43 @@ export function registerIpcHandlers(): void {
     wrap((includeEmpty?: boolean) => holdingsRepo.listHoldings(includeEmpty)),
   )
 
-  ipcMain.handle(IPC.accounts.list, wrap(() => accountsRepo.listAccounts()))
+  ipcMain.handle(IPC.profiles.list, wrap(() => profilesRepo.listProfiles()))
+  ipcMain.handle(
+    IPC.profiles.create,
+    wrap((input: unknown) =>
+      profilesRepo.createProfile(ProfileInputSchema.parse(input)),
+    ),
+  )
+  ipcMain.handle(
+    IPC.profiles.update,
+    wrap((id: number, input: unknown) =>
+      profilesRepo.updateProfile(
+        z.number().int().positive().parse(id),
+        ProfileInputSchema.partial().parse(input),
+      ),
+    ),
+  )
+  ipcMain.handle(
+    IPC.profiles.delete,
+    wrap((id: number) =>
+      profilesRepo.deleteProfile(z.number().int().positive().parse(id)),
+    ),
+  )
+  ipcMain.handle(IPC.profiles.getActive, wrap(() => profilesRepo.getActiveProfileId()))
+  ipcMain.handle(
+    IPC.profiles.setActive,
+    wrap((id: number) =>
+      profilesRepo.setActiveProfileId(z.number().int().positive().parse(id)),
+    ),
+  )
+
+  ipcMain.handle(
+    IPC.accounts.list,
+    wrap((opts: unknown) => {
+      const parsed = z.object({ allProfiles: z.boolean().optional() }).optional().parse(opts)
+      return accountsRepo.listAccounts(parsed)
+    }),
+  )
   ipcMain.handle(
     IPC.accounts.create,
     wrap((input: unknown) =>

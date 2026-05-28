@@ -1,4 +1,5 @@
 import { getDb } from '../connection'
+import { getActiveProfileId } from './profiles'
 import type {
   Currency,
   Dividend,
@@ -41,28 +42,34 @@ export function listDividends(filter?: {
   ticker?: string | null
   accountId?: number | null
   sinceYyyyMmDd?: string
+  allProfiles?: boolean
 }): Dividend[] {
   const where: string[] = []
   const params: unknown[] = []
   if (filter?.ticker) {
-    where.push('ticker = ?')
+    where.push('d.ticker = ?')
     params.push(filter.ticker.toUpperCase())
   }
   if (filter?.accountId !== undefined) {
     if (filter.accountId === null) {
-      where.push('account_id IS NULL')
+      where.push('d.account_id IS NULL')
     } else {
-      where.push('account_id = ?')
+      where.push('d.account_id = ?')
       params.push(filter.accountId)
     }
   }
   if (filter?.sinceYyyyMmDd) {
-    where.push('paid_at >= ?')
+    where.push('d.paid_at >= ?')
     params.push(filter.sinceYyyyMmDd)
   }
-  let sql = 'SELECT * FROM dividends'
+  if (!filter?.allProfiles) {
+    where.push('(d.account_id IS NULL OR a.profile_id = ?)')
+    params.push(getActiveProfileId())
+  }
+  let sql =
+    'SELECT d.* FROM dividends d LEFT JOIN accounts a ON a.id = d.account_id'
   if (where.length > 0) sql += ' WHERE ' + where.join(' AND ')
-  sql += ' ORDER BY paid_at DESC, id DESC'
+  sql += ' ORDER BY d.paid_at DESC, d.id DESC'
   return (getDb().prepare(sql).all(...params) as DividendRow[]).map(
     rowToDividend,
   )

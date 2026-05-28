@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   FolderOpen,
   HardDriveDownload,
+  Plus,
   RotateCcw,
   Save,
 } from 'lucide-react'
@@ -68,6 +69,24 @@ export default function SettingsPage() {
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [backupBusy, setBackupBusy] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
+  const [profiles, setProfiles] = useState<
+    Array<{ id: number; name: string }>
+  >([])
+  const [newProfileName, setNewProfileName] = useState('')
+  const activeProfileId = useUi((s) => s.activeProfileId)
+  const setActiveProfileId = useUi((s) => s.setActiveProfileId)
+  const reloadProfiles = async () => {
+    try {
+      setProfiles(await api().profiles.list())
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
+  useEffect(() => {
+    if (!initialized) return
+    void reloadProfiles()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialized])
   const bumpData = useUi((s) => s.bumpData)
   const [appVersion, setAppVersion] = useState<string>('')
   const [updateBusy, setUpdateBusy] = useState(false)
@@ -237,6 +256,47 @@ export default function SettingsPage() {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setImportBusy(false)
+    }
+  }
+
+  async function handleAddProfile() {
+    const name = newProfileName.trim()
+    if (!name) return
+    try {
+      const created = await api().profiles.create({ name })
+      setNewProfileName('')
+      await reloadProfiles()
+      toast.success(
+        locale === 'fr'
+          ? `Profil "${created.name}" cree.`
+          : `Profile "${created.name}" created.`,
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function handleDeleteProfile(p: { id: number; name: string }) {
+    if (profiles.length <= 1) {
+      toast.error(t('profiles.cannotDeleteLast'))
+      return
+    }
+    if (!window.confirm(t('profiles.deleteConfirm'))) return
+    try {
+      const r = await api().profiles.delete(p.id)
+      if (!r.deletedProfile) {
+        toast.error(t('profiles.cannotDeleteLast'))
+        return
+      }
+      await reloadProfiles()
+      // If we deleted the active one, refresh from backend so the
+      // Zustand store picks up the new active profile.
+      if (p.id === activeProfileId) {
+        const fallback = (await api().profiles.list())[0]
+        if (fallback) await setActiveProfileId(fallback.id)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -683,6 +743,76 @@ export default function SettingsPage() {
               )}
             </CardContent>
           )}
+        </Card>
+
+        {/* Profiles management — multi-user support so the user can
+           segregate their portfolio from a partner's. Each profile
+           has its own set of accounts (TFSA/RRSP/FHSA/...). Switching
+           profiles is done from the sidebar (only visible once 2+
+           profiles exist). */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('profiles.title')}</CardTitle>
+            <CardDescription>{t('profiles.subtitle')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ul className="divide-y divide-border text-sm">
+              {profiles.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between gap-2 py-2"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium truncate">{p.name}</span>
+                    {p.id === activeProfileId && (
+                      <Badge variant="secondary" className="text-[10px] h-5">
+                        {t('profiles.active')}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {p.id !== activeProfileId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void setActiveProfileId(p.id)}
+                      >
+                        {locale === 'fr' ? 'Activer' : 'Activate'}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteProfile(p)}
+                      className="text-muted-foreground hover:text-destructive"
+                      disabled={profiles.length <= 1}
+                    >
+                      {t('profiles.delete')}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <Input
+                value={newProfileName}
+                onChange={(e) => setNewProfileName(e.target.value)}
+                placeholder={
+                  locale === 'fr'
+                    ? "ex. Placements de ma conjointe"
+                    : "e.g. My partner's portfolio"
+                }
+                className="min-w-0 flex-1"
+              />
+              <Button
+                onClick={handleAddProfile}
+                disabled={!newProfileName.trim()}
+              >
+                <Plus />
+                {t('profiles.add')}
+              </Button>
+            </div>
+          </CardContent>
         </Card>
 
         <Card>

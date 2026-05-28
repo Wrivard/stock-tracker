@@ -171,6 +171,45 @@ const MIGRATIONS: Migration[] = [
         ON transactions(external_id) WHERE external_id IS NOT NULL;
     `,
   },
+  {
+    // v6 — multi-profile support. The user can now manage separate
+    // sets of accounts (their own + their partner's, for example),
+    // each with its own TFSA/RRSP/FHSA/taxable accounts. Implemented
+    // as a profile_id column on accounts (NOT NULL DEFAULT 1), with
+    // a single seeded "Mes placements" profile that all existing
+    // accounts get assigned to. Switching profiles in the UI changes
+    // the active-profile setting and every read query implicitly
+    // filters by it.
+    //
+    // Transactions / dividends inherit the profile via their
+    // account_id FK; rows where account_id IS NULL stay visible
+    // across all profiles (intentionally — they're loose entries
+    // the user hasn't categorized yet).
+    version: 6,
+    up: `
+      CREATE TABLE profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        color TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      INSERT INTO profiles (name, color, created_at, updated_at)
+        VALUES ('Mes placements', NULL, strftime('%s', 'now') * 1000,
+                                       strftime('%s', 'now') * 1000);
+
+      -- SQLite ALTER TABLE ... ADD COLUMN doesn't allow NOT NULL
+      -- with a non-literal default in the same statement. Add as
+      -- nullable, backfill everyone to profile 1, then app-level
+      -- code (accounts repo + IPC) enforces NOT NULL on writes.
+      ALTER TABLE accounts ADD COLUMN profile_id INTEGER
+        REFERENCES profiles(id) ON DELETE CASCADE;
+      UPDATE accounts SET profile_id = 1;
+
+      CREATE INDEX idx_accounts_profile ON accounts(profile_id);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

@@ -214,6 +214,25 @@ const dict: Dict = {
     fr: 'L\'app est configuree. Clique sur Actualiser dans le header pour charger les cotations.',
     en: 'The app is configured. Click Refresh in the header to load quotes.',
   },
+  'profiles.title': { fr: 'Profils', en: 'Profiles' },
+  'profiles.subtitle': {
+    fr: "Sépare tes placements et ceux d'autres personnes (conjoint(e), enfants). Chaque profil a ses propres comptes (CELI/REER/CELIAPP/etc.) et son propre tableau de bord.",
+    en: "Separate your investments from someone else's (partner, kids). Each profile has its own accounts (TFSA/RRSP/FHSA/etc.) and its own dashboard.",
+  },
+  'profiles.add': { fr: 'Nouveau profil', en: 'New profile' },
+  'profiles.edit': { fr: 'Modifier le profil', en: 'Edit profile' },
+  'profiles.delete': { fr: 'Supprimer', en: 'Delete' },
+  'profiles.deleteConfirm': {
+    fr: 'Supprimer ce profil ? Tous ses comptes et transactions seront aussi supprimes. Action irreversible.',
+    en: 'Delete this profile? All its accounts and transactions will also be deleted. This cannot be undone.',
+  },
+  'profiles.cannotDeleteLast': {
+    fr: 'Tu ne peux pas supprimer le dernier profil.',
+    en: 'You cannot delete the last remaining profile.',
+  },
+  'profiles.active': { fr: 'Profil actif', en: 'Active profile' },
+  'profiles.fields.name': { fr: 'Nom', en: 'Name' },
+
   'accounts.title': { fr: 'Comptes', en: 'Accounts' },
   'accounts.subtitle': {
     fr: "Gere tes comptes (TFSA, RRSP, FHSA, taxable...). L'import Questrade y associe automatiquement chaque transaction.",

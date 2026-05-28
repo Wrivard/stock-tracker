@@ -6,6 +6,11 @@ import type {
   Dividend,
   DividendInput,
   Holding,
+  // The db-level "Profile" type collides with the market-data
+  // "Profile" (company info) imported below. Alias here to keep
+  // both nameable without churn elsewhere.
+  Profile as UserProfile,
+  ProfileInput as UserProfileInput,
   Sector,
   Setting,
   Ticker,
@@ -86,9 +91,24 @@ const api = {
     list: (includeEmpty?: boolean) =>
       ipcRenderer.invoke(IPC.holdings.list, includeEmpty) as Promise<Holding[]>,
   },
+  profiles: {
+    list: () => ipcRenderer.invoke(IPC.profiles.list) as Promise<UserProfile[]>,
+    create: (input: UserProfileInput) =>
+      ipcRenderer.invoke(IPC.profiles.create, input) as Promise<UserProfile>,
+    update: (id: number, input: Partial<UserProfileInput>) =>
+      ipcRenderer.invoke(IPC.profiles.update, id, input) as Promise<UserProfile | null>,
+    delete: (id: number) =>
+      ipcRenderer.invoke(IPC.profiles.delete, id) as Promise<{
+        deletedProfile: boolean
+      }>,
+    getActive: () =>
+      ipcRenderer.invoke(IPC.profiles.getActive) as Promise<number>,
+    setActive: (id: number) =>
+      ipcRenderer.invoke(IPC.profiles.setActive, id) as Promise<void>,
+  },
   accounts: {
-    list: () =>
-      ipcRenderer.invoke(IPC.accounts.list) as Promise<Account[]>,
+    list: (opts?: { allProfiles?: boolean }) =>
+      ipcRenderer.invoke(IPC.accounts.list, opts) as Promise<Account[]>,
     create: (input: AccountInput) =>
       ipcRenderer.invoke(IPC.accounts.create, input) as Promise<Account>,
     update: (id: number, input: Partial<AccountInput>) =>

@@ -19,6 +19,14 @@ export const IPC = {
   holdings: {
     list: 'holdings:list',
   },
+  profiles: {
+    list: 'profiles:list',
+    create: 'profiles:create',
+    update: 'profiles:update',
+    delete: 'profiles:delete',
+    getActive: 'profiles:getActive',
+    setActive: 'profiles:setActive',
+  },
   accounts: {
     list: 'accounts:list',
     create: 'accounts:create',

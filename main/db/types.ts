@@ -29,6 +29,19 @@ export interface TickerInput {
   sectorOverride?: boolean
 }
 
+export interface Profile {
+  id: number
+  name: string
+  color: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ProfileInput {
+  name: string
+  color?: string | null
+}
+
 export type AccountKind =
   | 'tfsa'
   | 'rrsp'
@@ -44,6 +57,7 @@ export interface Account {
   kind: AccountKind
   brokerAccountNumber: string | null
   defaultCurrency: Currency | null
+  profileId: number
   createdAt: number
   updatedAt: number
 }
@@ -53,6 +67,7 @@ export interface AccountInput {
   kind: AccountKind
   brokerAccountNumber?: string | null
   defaultCurrency?: Currency | null
+  profileId?: number
 }
 
 export interface Transaction {

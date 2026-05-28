@@ -9,6 +9,11 @@ interface UiState {
   displayCurrency: Currency
   locale: Locale
   refreshIntervalSec: number
+  // Active profile id — every read on the backend filters by this
+  // (transactions, dividends, holdings, accounts). Defaults to 1
+  // (the seeded "Mes placements" profile) until loadFromBackend
+  // resolves the persisted value.
+  activeProfileId: number
   apiKeyStatus: {
     finnhub: boolean
     twelvedata: boolean
@@ -33,6 +38,7 @@ interface UiState {
   setDisplayCurrency: (c: Currency) => Promise<void>
   setLocale: (l: Locale) => Promise<void>
   setRefreshIntervalSec: (s: number) => Promise<void>
+  setActiveProfileId: (id: number) => Promise<void>
   refreshApiKeyStatus: () => Promise<void>
   bumpRefresh: () => void
   bumpData: () => void
@@ -44,6 +50,7 @@ export const useUi = create<UiState>((set) => ({
   displayCurrency: 'CAD',
   locale: 'fr',
   refreshIntervalSec: 300,
+  activeProfileId: 1,
   apiKeyStatus: {
     finnhub: false,
     twelvedata: false,
@@ -61,16 +68,18 @@ export const useUi = create<UiState>((set) => ({
 
   loadFromBackend: async () => {
     const a = api()
-    const [cur, loc, interval, keys] = await Promise.all([
+    const [cur, loc, interval, keys, activeProfile] = await Promise.all([
       a.settings.get('app.displayCurrency'),
       a.settings.get('app.locale'),
       a.settings.get('app.refreshIntervalSec'),
       a.settings.apiKeyStatus(),
+      a.profiles.getActive(),
     ])
     set({
       displayCurrency: cur === 'USD' ? 'USD' : 'CAD',
       locale: loc === 'en' ? 'en' : 'fr',
       refreshIntervalSec: interval ? Number(interval) || 300 : 300,
+      activeProfileId: activeProfile,
       apiKeyStatus: keys,
       initialized: true,
     })
@@ -119,6 +128,22 @@ export const useUi = create<UiState>((set) => ({
       // UI doesn't visibly snap back.
       console.error('[store] persisting refreshIntervalSec failed:', err)
     }
+  },
+
+  setActiveProfileId: async (id) => {
+    // Update in-memory state synchronously so every page re-renders
+    // immediately, then persist via IPC and bump dataTick so all
+    // pages re-fetch with the new profile context.
+    set((state) => ({ ...state, activeProfileId: id }))
+    try {
+      await api().profiles.setActive(id)
+    } catch (err) {
+      console.error('[store] persisting activeProfileId failed:', err)
+    }
+    // Bumping dataTick triggers all reload() effects across the app
+    // since holdings / transactions / dividends are now scoped to
+    // the new profile id on the backend.
+    set((state) => ({ ...state, dataTick: state.dataTick + 1 }))
   },
 
   refreshApiKeyStatus: async () => {

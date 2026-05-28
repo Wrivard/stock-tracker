@@ -1,4 +1,5 @@
 import { getDb } from '../connection'
+import { getActiveProfileId } from './profiles'
 import type { Currency, Holding } from '../types'
 
 interface HoldingRow {
@@ -16,6 +17,11 @@ interface HoldingRow {
   sell_count: number | null
 }
 
+// Holdings are derived from transactions, so the profile filter has
+// to apply at the tr level INSIDE the join — otherwise we'd be
+// summing trades from across all profiles. Account_id IS NULL means
+// the trade is "shared / uncategorized" and stays visible in every
+// profile, same convention as listTransactions.
 const HOLDINGS_QUERY = `
   SELECT
     t.symbol,
@@ -33,6 +39,8 @@ const HOLDINGS_QUERY = `
   FROM tickers t
   LEFT JOIN sectors s     ON s.id = t.sector_id
   LEFT JOIN transactions tr ON tr.ticker = t.symbol
+  LEFT JOIN accounts a ON a.id = tr.account_id
+  WHERE (tr.id IS NULL OR tr.account_id IS NULL OR a.profile_id = ?)
   GROUP BY t.symbol
   ORDER BY t.symbol
 `
@@ -59,7 +67,9 @@ const rowToHolding = (r: HoldingRow): Holding => {
 }
 
 export function listHoldings(includeEmpty = false): Holding[] {
-  const rows = getDb().prepare(HOLDINGS_QUERY).all() as HoldingRow[]
+  const rows = getDb()
+    .prepare(HOLDINGS_QUERY)
+    .all(getActiveProfileId()) as HoldingRow[]
   const holdings = rows.map(rowToHolding)
   return includeEmpty ? holdings : holdings.filter((h) => h.quantity > 0)
 }

@@ -6,6 +6,7 @@ import type {
   TransactionKind,
 } from '../types'
 import { ensureAccountFromQuestrade } from './accounts'
+import { getActiveProfileId } from './profiles'
 import { getTickerBySymbol, upsertTicker } from './tickers'
 
 interface TransactionRow {
@@ -100,24 +101,36 @@ export function getTransactionById(id: number): Transaction | null {
 export function listTransactions(filter?: {
   ticker?: string
   accountId?: number | null
+  allProfiles?: boolean
 }): Transaction[] {
+  // Profile filter: by default, scope to the active profile via the
+  // accounts join. NULL-account transactions are kept ("shared
+  // entries the user hasn't categorized yet") so they're visible
+  // from any profile. allProfiles=true bypasses the scope entirely
+  // (used by the backfill helper and the global-state portfolio
+  // recalculations).
   const where: string[] = []
   const params: unknown[] = []
   if (filter?.ticker) {
-    where.push('ticker = ?')
+    where.push('t.ticker = ?')
     params.push(filter.ticker.toUpperCase())
   }
   if (filter?.accountId !== undefined) {
     if (filter.accountId === null) {
-      where.push('account_id IS NULL')
+      where.push('t.account_id IS NULL')
     } else {
-      where.push('account_id = ?')
+      where.push('t.account_id = ?')
       params.push(filter.accountId)
     }
   }
-  let sql = 'SELECT * FROM transactions'
+  if (!filter?.allProfiles) {
+    where.push('(t.account_id IS NULL OR a.profile_id = ?)')
+    params.push(getActiveProfileId())
+  }
+  let sql =
+    'SELECT t.* FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id'
   if (where.length > 0) sql += ' WHERE ' + where.join(' AND ')
-  sql += ' ORDER BY occurred_at DESC, id DESC'
+  sql += ' ORDER BY t.occurred_at DESC, t.id DESC'
   const rows = getDb().prepare(sql).all(...params) as TransactionRow[]
   return rows.map(rowToTransaction)
 }
