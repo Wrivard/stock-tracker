@@ -11,7 +11,6 @@ import {
   Select,
   SelectContent,
   SelectItem,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -259,17 +258,9 @@ function ProfilePicker({ locale }: { locale: 'fr' | 'en' }) {
     }
   }, [initialized, dataTick])
 
-  // Sentinel value used by the Select onValueChange to fire the
-  // create dialog instead of selecting a real profile id.
-  const NEW = '__new__'
-
   const active = profiles.find((p) => p.id === activeProfileId)
 
   function handleChange(v: string) {
-    if (v === NEW) {
-      setCreateOpen(true)
-      return
-    }
     const id = Number(v)
     if (Number.isFinite(id) && id > 0) {
       void setActiveProfileId(id)
@@ -299,6 +290,13 @@ function ProfilePicker({ locale }: { locale: 'fr' | 'en' }) {
 
   return (
     <>
+      {/* Two-control layout: a profile-only Select + a dedicated
+          "+ create" Button. Bundling the create affordance inside
+          the Select as a sentinel item confused Radix — controlled
+          value vs. internal selection state ended up disagreeing,
+          so the dropdown stopped responding to clicks after the
+          first interaction. Splitting them keeps both behaviors
+          stable. */}
       <Select
         // key on the active id forces a remount when the store value
         // changes — same defensive pattern as the currency Select.
@@ -316,18 +314,33 @@ function ProfilePicker({ locale }: { locale: 'fr' | 'en' }) {
           </span>
         </SelectTrigger>
         <SelectContent>
+          {profiles.length === 0 && (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">
+              …
+            </div>
+          )}
           {profiles.map((p) => (
             <SelectItem key={p.id} value={String(p.id)}>
               {p.name}
             </SelectItem>
           ))}
-          <SelectSeparator />
-          <SelectItem value={NEW} className="text-primary">
-            <Plus className="size-3.5" />
-            {locale === 'fr' ? 'Nouveau profil' : 'New profile'}
-          </SelectItem>
         </SelectContent>
       </Select>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => setCreateOpen(true)}
+            aria-label="new profile"
+          >
+            <Plus />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {locale === 'fr' ? 'Nouveau profil' : 'New profile'}
+        </TooltipContent>
+      </Tooltip>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
