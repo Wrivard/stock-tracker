@@ -74,6 +74,13 @@ const api = {
       >,
     delete: (id: number) =>
       ipcRenderer.invoke(IPC.transactions.delete, id) as Promise<void>,
+    backfillQuestrade: () =>
+      ipcRenderer.invoke(IPC.transactions.backfillQuestrade) as Promise<{
+        attached: number
+        accountsCreated: number
+        alreadyOk: number
+        unparseable: number
+      }>,
   },
   holdings: {
     list: (includeEmpty?: boolean) =>

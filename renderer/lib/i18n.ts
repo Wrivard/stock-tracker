@@ -334,6 +334,18 @@ const dict: Dict = {
     en: '{n} new tickers added: {list}',
   },
   'import.canceled': { fr: 'Import annule.', en: 'Import canceled.' },
+  'import.backfillButton': {
+    fr: 'Reattacher mes anciens trades aux comptes',
+    en: 'Re-attach my old trades to accounts',
+  },
+  'import.backfillHelp': {
+    fr: "Pour les transactions importees avant que la feature Comptes existait. Lit la note de chaque ligne, recree les comptes manquants et y attache les transactions.",
+    en: 'For transactions imported before the Accounts feature existed. Reads each row note, re-creates the missing accounts, and links them.',
+  },
+  'import.backfillSummary': {
+    fr: '{attached} transactions rattachees · {accountsCreated} compte(s) cree(s) · {unparseable} sans pattern',
+    en: '{attached} transactions linked · {accountsCreated} account(s) created · {unparseable} unparseable',
+  },
   'onboarding.import.title': { fr: 'Importer un broker (optionnel)', en: 'Import broker (optional)' },
   'onboarding.import.body': {
     fr: 'Charge directement l\'export XLSX de Questrade pour preremplir tes positions. Sinon, passe et saisis manuellement a l\'etape suivante.',

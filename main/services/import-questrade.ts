@@ -193,12 +193,12 @@ function rowToTransaction(row: RawRow): ParsedRow | { error: string } {
 
   // External id derived from the natural-key fields of this row, so
   // re-importing the same XLSX collapses to the existing transactions
-  // instead of duplicating them. Description is included because
-  // Questrade emits multiple Buy rows on the same date for the same
-  // ticker (different fills of one logical order) — using description
-  // avoids the dedup conflating them.
-  const description = String(row['Description'] ?? '').trim()
-  const externalId = `qt:${accountNo}:${symbol}:${occurredAt}:${action.toLowerCase()}:${absQuantity.toFixed(4)}:${price.toFixed(6)}:${description.slice(0, 40)}`
+  // instead of duplicating them. We deliberately exclude Description
+  // here so the same id can be reconstructed by the post-update
+  // backfill (which only has the notes string to work with). The
+  // tradeoff: same-day same-price multi-fill orders collapse, but
+  // that's rare and the user can split them manually if it bites.
+  const externalId = `qt:${accountNo}:${symbol}:${occurredAt}:${action.toLowerCase()}:${absQuantity.toFixed(4)}:${price.toFixed(6)}`
   return {
     accountLabel,
     accountTypeRaw: accountType,

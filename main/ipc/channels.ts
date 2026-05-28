@@ -14,6 +14,7 @@ export const IPC = {
     create: 'transactions:create',
     update: 'transactions:update',
     delete: 'transactions:delete',
+    backfillQuestrade: 'transactions:backfillQuestrade',
   },
   holdings: {
     list: 'holdings:list',

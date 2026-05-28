@@ -189,6 +189,10 @@ export function registerIpcHandlers(): void {
     IPC.transactions.delete,
     wrap((id: number) => txRepo.deleteTransaction(id)),
   )
+  ipcMain.handle(
+    IPC.transactions.backfillQuestrade,
+    wrap(() => txRepo.backfillQuestradeImports()),
+  )
 
   ipcMain.handle(
     IPC.holdings.list,

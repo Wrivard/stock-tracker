@@ -11,6 +11,10 @@ import { listTransactions } from '../main/db/repo/transactions'
 import { listTickers } from '../main/db/repo/tickers'
 import { listAccounts } from '../main/db/repo/accounts'
 import { listDividends } from '../main/db/repo/dividends'
+import {
+  backfillQuestradeImports,
+  createTransaction,
+} from '../main/db/repo/transactions'
 
 let db: Database.Database
 
@@ -382,6 +386,56 @@ describe('import-questrade.importQuestradeXlsx', () => {
     } finally {
       unlinkSync(path)
     }
+  })
+
+  it('backfillQuestradeImports re-attaches pre-v0.1.28 trades to accounts', () => {
+    // Simulate a pre-v0.1.28 import: a transaction with the
+    // canonical Questrade notes pattern but account_id and
+    // external_id still NULL (as they would be on a row written by
+    // the old importer).
+    createTransaction({
+      ticker: 'SBET',
+      kind: 'buy',
+      quantity: 95,
+      price: 20.9688,
+      currency: 'USD',
+      fees: 0,
+      notes: 'Imported from Questrade · Individual FHSA #53543085',
+      occurredAt: '2025-08-18',
+      // accountId NOT passed — repo writes NULL
+      // externalId NOT passed — repo writes NULL
+    })
+
+    // Sanity: no accounts in the DB yet, the row is orphaned.
+    expect(listAccounts()).toHaveLength(0)
+    let txs = listTransactions()
+    expect(txs).toHaveLength(1)
+    expect(txs[0].accountId).toBeNull()
+    expect(txs[0].externalId).toBeNull()
+
+    const result = backfillQuestradeImports()
+    expect(result.attached).toBe(1)
+    expect(result.accountsCreated).toBe(1)
+    expect(result.unparseable).toBe(0)
+
+    // After backfill: account created with the right kind/broker
+    // number, and the transaction has been linked + tagged with
+    // the same external_id format that a re-import would generate.
+    const accs = listAccounts()
+    expect(accs).toHaveLength(1)
+    expect(accs[0].kind).toBe('fhsa')
+    expect(accs[0].brokerAccountNumber).toBe('53543085')
+
+    txs = listTransactions()
+    expect(txs[0].accountId).toBe(accs[0].id)
+    expect(txs[0].externalId).toBe(
+      'qt:53543085:SBET:2025-08-18:buy:95.0000:20.968800',
+    )
+
+    // Running again is a no-op (everything is already OK).
+    const second = backfillQuestradeImports()
+    expect(second.attached).toBe(0)
+    expect(second.accountsCreated).toBe(0)
   })
 
   it('is idempotent on re-import: trades upsert by external_id', () => {

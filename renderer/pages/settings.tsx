@@ -240,6 +240,33 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleBackfill() {
+    setImportBusy(true)
+    try {
+      const r = await api().transactions.backfillQuestrade()
+      bumpData()
+      if (r.attached === 0 && r.accountsCreated === 0) {
+        toast.info(
+          locale === 'fr'
+            ? 'Aucune transaction sans compte detectee.'
+            : 'No unattached transactions found.',
+        )
+      } else {
+        toast.success(
+          t('import.backfillSummary', {
+            attached: r.attached,
+            accountsCreated: r.accountsCreated,
+            unparseable: r.unparseable,
+          }),
+        )
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
   function formatBytes(n: number): string {
     if (n < 1024) return `${n} B`
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
@@ -665,15 +692,26 @@ export default function SettingsPage() {
                 <CardTitle>{t('import.title')}</CardTitle>
                 <CardDescription>{t('import.help')}</CardDescription>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleImportQuestrade}
-                disabled={importBusy}
-              >
-                <FileSpreadsheet />
-                {importBusy ? t('import.questradeBusy') : t('import.questradeButton')}
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBackfill}
+                  disabled={importBusy}
+                  title={t('import.backfillHelp')}
+                >
+                  {t('import.backfillButton')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleImportQuestrade}
+                  disabled={importBusy}
+                >
+                  <FileSpreadsheet />
+                  {importBusy ? t('import.questradeBusy') : t('import.questradeButton')}
+                </Button>
+              </div>
             </div>
           </CardHeader>
         </Card>

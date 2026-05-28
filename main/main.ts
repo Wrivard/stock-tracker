@@ -240,6 +240,31 @@ function bindLocalShortcuts(win: BrowserWindow) {
     } catch (err) {
       log('post-update hook failed', err instanceof Error ? err : { err: String(err) })
     }
+
+    // One-time backfill for pre-v0.1.28 Questrade imports. Users who
+    // imported their broker XLSX before the accounts feature existed
+    // have transactions with account_id = NULL but the broker info is
+    // sitting in their notes field. Walk those, re-attach to accounts,
+    // and populate external_id so future re-imports are also
+    // idempotent. Gated by a setting so it only runs once per install.
+    try {
+      const alreadyRan = getSetting('app.backfilledQuestradeAccounts')
+      if (alreadyRan !== '1') {
+        const { backfillQuestradeImports } = await import(
+          './db/repo/transactions'
+        )
+        const r = backfillQuestradeImports()
+        setSetting('app.backfilledQuestradeAccounts', '1')
+        if (r.attached > 0 || r.accountsCreated > 0) {
+          log('post-update: questrade backfill', r)
+        }
+      }
+    } catch (err) {
+      log(
+        'questrade backfill failed',
+        err instanceof Error ? err : { err: String(err) },
+      )
+    }
     void maybeCaptureDailySnapshot().catch((err) =>
       log('snapshot capture failed', err instanceof Error ? err : { err: String(err) }),
     )
