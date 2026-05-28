@@ -1,5 +1,5 @@
 import { getDb } from '../connection'
-import { getActiveProfileId } from './profiles'
+import { getActiveProfileId, getDefaultProfileId } from './profiles'
 import type {
   Currency,
   Dividend,
@@ -63,8 +63,14 @@ export function listDividends(filter?: {
     params.push(filter.sinceYyyyMmDd)
   }
   if (!filter?.allProfiles) {
-    where.push('(d.account_id IS NULL OR a.profile_id = ?)')
-    params.push(getActiveProfileId())
+    // Same NULL-scoping as listTransactions: orphan dividends only
+    // show in the default profile, not leaking into every profile.
+    const activeId = getActiveProfileId()
+    const defaultId = getDefaultProfileId()
+    where.push(
+      '(a.profile_id = ? OR (d.account_id IS NULL AND ? = ?))',
+    )
+    params.push(activeId, activeId, defaultId)
   }
   let sql =
     'SELECT d.* FROM dividends d LEFT JOIN accounts a ON a.id = d.account_id'

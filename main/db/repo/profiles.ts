@@ -101,3 +101,16 @@ export function getActiveProfileId(): number {
 export function setActiveProfileId(id: number): void {
   setSetting('app.activeProfileId', String(id))
 }
+
+// Pick a stable "default" profile for orphan / NULL-account rows.
+// The oldest profile (lowest id) wins — it's the one seeded by the
+// v6 migration, or the one the user most likely upgraded from. Used
+// by the holdings / transactions / dividends queries to scope rows
+// without an explicit account to a single profile instead of leaking
+// them across every profile in the system.
+export function getDefaultProfileId(): number {
+  const row = getDb()
+    .prepare('SELECT id FROM profiles ORDER BY id LIMIT 1')
+    .get() as { id: number } | undefined
+  return row?.id ?? 1
+}

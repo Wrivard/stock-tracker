@@ -6,7 +6,7 @@ import type {
   TransactionKind,
 } from '../types'
 import { ensureAccountFromQuestrade } from './accounts'
-import { getActiveProfileId } from './profiles'
+import { getActiveProfileId, getDefaultProfileId } from './profiles'
 import { getTickerBySymbol, upsertTicker } from './tickers'
 
 interface TransactionRow {
@@ -124,8 +124,16 @@ export function listTransactions(filter?: {
     }
   }
   if (!filter?.allProfiles) {
-    where.push('(t.account_id IS NULL OR a.profile_id = ?)')
-    params.push(getActiveProfileId())
+    // Scope by profile. A trade with account_id IS NULL has no
+    // explicit owner — attach it to the default (oldest) profile so
+    // it shows in exactly one view instead of every profile leaking
+    // every other profile's orphan data.
+    const activeId = getActiveProfileId()
+    const defaultId = getDefaultProfileId()
+    where.push(
+      '(a.profile_id = ? OR (t.account_id IS NULL AND ? = ?))',
+    )
+    params.push(activeId, activeId, defaultId)
   }
   let sql =
     'SELECT t.* FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id'
