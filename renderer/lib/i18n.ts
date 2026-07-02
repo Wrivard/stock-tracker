@@ -259,6 +259,44 @@ const dict: Dict = {
     fr: 'Devise par defaut',
     en: 'Default currency',
   },
+  'accounts.fields.annualLimit': {
+    fr: 'Plafond de cotisation annuel (CAD)',
+    en: 'Annual contribution limit (CAD)',
+  },
+  'accounts.fields.annualLimitHint': {
+    fr: 'Optionnel. Ex. 8000 pour un CELIAPP / FHSA. Laisse vide pour ne pas suivre de plafond.',
+    en: 'Optional. E.g. 8000 for a FHSA. Leave empty to not track a limit.',
+  },
+  'accounts.contrib.title': {
+    fr: 'Plafonds de cotisation',
+    en: 'Contribution room',
+  },
+  'accounts.contrib.subtitle': {
+    fr: 'Cotisations par annee civile, calculees a partir de tes achats bruts. Les montants USD sont convertis au taux courant.',
+    en: 'Contributions per calendar year, computed from your gross buys. USD amounts are converted at the current rate.',
+  },
+  'accounts.contrib.empty': {
+    fr: 'Aucun compte avec plafond. Ajoute un plafond de cotisation a un compte (ex. FHSA 8000$) pour suivre ta marge.',
+    en: 'No account has a limit yet. Set a contribution limit on an account (e.g. FHSA $8,000) to track your room.',
+  },
+  'accounts.contrib.used': { fr: 'Cotise', en: 'Contributed' },
+  'accounts.contrib.remaining': { fr: 'Reste', en: 'Remaining' },
+  'accounts.contrib.full': {
+    fr: 'Plein — cotise dans ton CELI a la place',
+    en: 'Full — contribute to your TFSA instead',
+  },
+  'accounts.contrib.over': {
+    fr: 'Depassement de {amount}',
+    en: 'Over by {amount}',
+  },
+  'accounts.contrib.thisYear': {
+    fr: 'Cette annee ({year})',
+    en: 'This year ({year})',
+  },
+  'accounts.contrib.priorYears': {
+    fr: 'Annees precedentes',
+    en: 'Previous years',
+  },
   'accounts.filter.all': { fr: 'Tous les comptes', en: 'All accounts' },
   'accounts.filter.unassigned': { fr: 'Sans compte', en: 'Unassigned' },
   'accounts.kind.tfsa': { fr: 'CELI / TFSA', en: 'TFSA' },

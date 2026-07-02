@@ -210,6 +210,26 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_accounts_profile ON accounts(profile_id);
     `,
   },
+  {
+    // v7 — per-account annual contribution limit. Registered plans
+    // like the FHSA (CELIAPP) cap yearly contributions ($8,000 for
+    // the FHSA). We track how much has gone into each account per
+    // calendar year — computed from gross buy transactions — so the
+    // user knows how much room is left before they should redirect
+    // money to another account (e.g. their TFSA / CELI).
+    //
+    // Nullable REAL: NULL = no limit tracked (the default for taxable
+    // accounts and anything the user hasn't configured). Existing
+    // FHSA accounts are backfilled to the standard $8,000 so the
+    // feature lights up immediately on data that's already imported.
+    // The user can override the number per account in the Accounts UI
+    // (TFSA/RRSP limits vary per person, so we don't presume those).
+    version: 7,
+    up: `
+      ALTER TABLE accounts ADD COLUMN annual_contribution_limit REAL;
+      UPDATE accounts SET annual_contribution_limit = 8000 WHERE kind = 'fhsa';
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

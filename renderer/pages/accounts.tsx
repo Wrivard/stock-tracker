@@ -11,6 +11,7 @@ import type {
   Transaction,
 } from '../../main/db/types'
 import { api } from '@/lib/api'
+import { formatMoney, todayIsoDate } from '@/lib/format'
 import { useUi } from '@/lib/store'
 import { useT } from '@/lib/i18n'
 import type { TKey } from '@/lib/i18n'
@@ -68,6 +69,7 @@ interface FormState {
   kind: AccountKind
   brokerAccountNumber: string
   defaultCurrency: Currency | ''
+  annualLimit: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -75,7 +77,12 @@ const EMPTY_FORM: FormState = {
   kind: 'taxable',
   brokerAccountNumber: '',
   defaultCurrency: '',
+  annualLimit: '',
 }
+
+// Standard FHSA yearly contribution cap (CAD). Prefilled when the user
+// picks the FHSA kind and hasn't typed a limit of their own.
+const FHSA_ANNUAL_LIMIT = 8000
 
 function formFromAccount(a: Account): FormState {
   return {
@@ -83,15 +90,25 @@ function formFromAccount(a: Account): FormState {
     kind: a.kind,
     brokerAccountNumber: a.brokerAccountNumber ?? '',
     defaultCurrency: a.defaultCurrency ?? '',
+    annualLimit:
+      a.annualContributionLimit != null
+        ? String(a.annualContributionLimit)
+        : '',
   }
 }
 
 function formToInput(f: FormState): AccountInput {
+  const parsed = Number(f.annualLimit.replace(',', '.'))
+  const annualContributionLimit =
+    f.annualLimit.trim() !== '' && Number.isFinite(parsed) && parsed > 0
+      ? parsed
+      : null
   return {
     name: f.name.trim(),
     kind: f.kind,
     brokerAccountNumber: f.brokerAccountNumber.trim() || null,
     defaultCurrency: f.defaultCurrency || null,
+    annualContributionLimit,
   }
 }
 
@@ -108,16 +125,25 @@ export default function AccountsPage() {
   const [editing, setEditing] = useState<Account | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
+  // USD→CAD rate to normalize USD buys against the CAD contribution
+  // caps. Defaults to 1 (no-op) until the rate loads or if it fails,
+  // so the numbers degrade to "treated as CAD" rather than breaking.
+  const [usdToCad, setUsdToCad] = useState(1)
 
   const reload = async () => {
     setLoading(true)
     try {
-      const [accs, txs] = await Promise.all([
+      const [accs, txs, fx] = await Promise.all([
         api().accounts.list(),
         api().transactions.list(),
+        api()
+          .market.fxRate('USD', 'CAD')
+          .catch(() => null),
       ])
       setAccounts(accs)
       setTransactions(txs)
+      const rate = fx?.data?.rate
+      if (rate && rate > 0) setUsdToCad(rate)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
@@ -144,6 +170,38 @@ export default function AccountsPage() {
   }, [transactions])
 
   const unassignedCount = txCounts.get(null) ?? 0
+
+  const currentYear = todayIsoDate().slice(0, 4)
+
+  // Sum gross buy cost per account per calendar year, in CAD. Gross =
+  // quantity*price + fees; sells are intentionally ignored (a FHSA
+  // withdrawal doesn't restore contribution room). USD trades are
+  // converted at the current rate. Keyed accountId -> year -> CAD.
+  const contribByAccount = useMemo(() => {
+    const map = new Map<number, Map<string, number>>()
+    for (const tx of transactions) {
+      if (tx.kind !== 'buy' || tx.accountId == null) continue
+      const year = tx.occurredAt.slice(0, 4)
+      const native = tx.quantity * tx.price + (tx.fees ?? 0)
+      const cad = tx.currency === 'USD' ? native * usdToCad : native
+      let years = map.get(tx.accountId)
+      if (!years) {
+        years = new Map()
+        map.set(tx.accountId, years)
+      }
+      years.set(year, (years.get(year) ?? 0) + cad)
+    }
+    return map
+  }, [transactions, usdToCad])
+
+  // Accounts the user has given a yearly cap (FHSA gets one by default).
+  const trackedAccounts = useMemo(
+    () =>
+      accounts.filter(
+        (a) => a.annualContributionLimit != null && a.annualContributionLimit > 0,
+      ),
+    [accounts],
+  )
 
   function openCreate() {
     setEditing(null)
@@ -216,6 +274,99 @@ export default function AccountsPage() {
             {t('accounts.add')}
           </Button>
         </header>
+
+        {!loading && trackedAccounts.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">
+                {t('accounts.contrib.title')}
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {t('accounts.contrib.subtitle')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {trackedAccounts.map((a) => {
+                const moneyLocale = locale === 'fr' ? 'fr-CA' : 'en-CA'
+                const money = (n: number) =>
+                  formatMoney(n, 'CAD', moneyLocale)
+                const limit = a.annualContributionLimit as number
+                const years = contribByAccount.get(a.id)
+                const used = years?.get(currentYear) ?? 0
+                const remaining = limit - used
+                const pct = Math.max(0, Math.min(1, used / limit))
+                const full = used >= limit
+                const fillClass = full
+                  ? 'bg-destructive'
+                  : pct >= 0.8
+                    ? 'bg-amber-500'
+                    : 'bg-primary'
+                const priorYears = years
+                  ? [...years.entries()]
+                      .filter(([y, amt]) => y !== currentYear && amt > 0)
+                      .sort((x, y) => (x[0] < y[0] ? 1 : -1))
+                  : []
+                return (
+                  <div key={a.id} className="space-y-1.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium truncate">{a.name}</span>
+                        <Badge variant="secondary" className="shrink-0">
+                          {t(kindLabelKey(a.kind))}
+                        </Badge>
+                      </div>
+                      <span className="tabular-nums text-sm shrink-0">
+                        {money(used)}{' '}
+                        <span className="text-muted-foreground">
+                          / {money(limit)}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${fillClass}`}
+                        style={{ width: `${pct * 100}%` }}
+                      />
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3 text-xs">
+                      {full ? (
+                        <span className="font-medium text-destructive">
+                          {remaining < 0
+                            ? t('accounts.contrib.over', {
+                                amount: money(-remaining),
+                              })
+                            : t('accounts.contrib.full')}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {t('accounts.contrib.remaining')} :{' '}
+                          <span className="tabular-nums text-foreground">
+                            {money(remaining)}
+                          </span>
+                        </span>
+                      )}
+                      <span className="text-muted-foreground">
+                        {t('accounts.contrib.thisYear', { year: currentYear })}
+                      </span>
+                    </div>
+                    {priorYears.length > 0 && (
+                      <div className="text-xs text-muted-foreground pt-0.5">
+                        <span className="mr-2">
+                          {t('accounts.contrib.priorYears')} :
+                        </span>
+                        {priorYears.map(([y, amt]) => (
+                          <span key={y} className="mr-3 tabular-nums">
+                            {y} {money(amt)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -352,9 +503,19 @@ export default function AccountsPage() {
                 <Select
                   key={form.kind}
                   value={form.kind}
-                  onValueChange={(v) =>
-                    setForm({ ...form, kind: v as AccountKind })
-                  }
+                  onValueChange={(v) => {
+                    const kind = v as AccountKind
+                    setForm((prev) => ({
+                      ...prev,
+                      kind,
+                      // Prefill the standard FHSA cap when the user
+                      // switches to FHSA and hasn't typed a limit yet.
+                      annualLimit:
+                        kind === 'fhsa' && prev.annualLimit.trim() === ''
+                          ? String(FHSA_ANNUAL_LIMIT)
+                          : prev.annualLimit,
+                    }))
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -404,6 +565,23 @@ export default function AccountsPage() {
                 }
                 placeholder="53543085"
               />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="acc-limit">
+                {t('accounts.fields.annualLimit')}
+              </Label>
+              <Input
+                id="acc-limit"
+                inputMode="decimal"
+                value={form.annualLimit}
+                onChange={(e) =>
+                  setForm({ ...form, annualLimit: e.target.value })
+                }
+                placeholder="8000"
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('accounts.fields.annualLimitHint')}
+              </p>
             </div>
           </div>
           <DialogFooter>

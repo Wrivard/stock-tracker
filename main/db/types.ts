@@ -58,6 +58,10 @@ export interface Account {
   brokerAccountNumber: string | null
   defaultCurrency: Currency | null
   profileId: number
+  // Yearly contribution cap in CAD (e.g. 8000 for a FHSA). null = no
+  // limit tracked. Used to compute remaining contribution room from
+  // gross buy transactions per calendar year.
+  annualContributionLimit: number | null
   createdAt: number
   updatedAt: number
 }
@@ -68,6 +72,7 @@ export interface AccountInput {
   brokerAccountNumber?: string | null
   defaultCurrency?: Currency | null
   profileId?: number
+  annualContributionLimit?: number | null
 }
 
 export interface Transaction {

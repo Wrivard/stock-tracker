@@ -51,6 +51,7 @@ const AccountInputSchema = z.object({
   brokerAccountNumber: z.string().max(40).nullable().optional(),
   defaultCurrency: Currency.nullable().optional(),
   profileId: z.number().int().positive().optional(),
+  annualContributionLimit: z.number().nonnegative().nullable().optional(),
 })
 
 const ProfileInputSchema = z.object({

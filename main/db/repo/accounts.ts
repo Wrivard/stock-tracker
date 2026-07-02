@@ -9,6 +9,7 @@ interface AccountRow {
   broker_account_number: string | null
   default_currency: string | null
   profile_id: number
+  annual_contribution_limit: number | null
   created_at: number
   updated_at: number
 }
@@ -20,6 +21,7 @@ const rowToAccount = (r: AccountRow): Account => ({
   brokerAccountNumber: r.broker_account_number,
   defaultCurrency: (r.default_currency as Currency | null) ?? null,
   profileId: r.profile_id,
+  annualContributionLimit: r.annual_contribution_limit,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -79,8 +81,8 @@ export function createAccount(input: AccountInput): Account {
   const result = getDb()
     .prepare(
       `INSERT INTO accounts
-         (name, kind, broker_account_number, default_currency, profile_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (name, kind, broker_account_number, default_currency, profile_id, annual_contribution_limit, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.name,
@@ -88,6 +90,7 @@ export function createAccount(input: AccountInput): Account {
       input.brokerAccountNumber ?? null,
       input.defaultCurrency ?? null,
       profileId,
+      input.annualContributionLimit ?? null,
       now,
       now,
     )
@@ -110,6 +113,7 @@ export function updateAccount(
              broker_account_number = ?,
              default_currency = ?,
              profile_id = ?,
+             annual_contribution_limit = ?,
              updated_at = ?
        WHERE id = ?`,
     )
@@ -119,6 +123,7 @@ export function updateAccount(
       merged.brokerAccountNumber,
       merged.defaultCurrency,
       merged.profileId,
+      merged.annualContributionLimit ?? null,
       now,
       id,
     )
@@ -170,5 +175,9 @@ export function ensureAccountFromQuestrade(args: {
     kind,
     brokerAccountNumber: args.brokerAccountNumber,
     defaultCurrency: args.defaultCurrency ?? null,
+    // Seed the FHSA yearly cap so contribution tracking works right
+    // after an import, matching the migration backfill for pre-existing
+    // FHSA accounts.
+    annualContributionLimit: kind === 'fhsa' ? 8000 : null,
   })
 }
